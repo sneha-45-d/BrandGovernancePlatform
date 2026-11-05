@@ -249,12 +249,12 @@ function AnalyticsPage() {
       <div className="mx-auto max-w-7xl px-4 py-6 lg:px-6">
         <div className="surface-panel mb-6 flex flex-col gap-5 rounded-[2rem] p-4 shadow-sm backdrop-blur-sm lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-600">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-lg shadow-indigo-500/20">
               <TrendingUp className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Analytics</p>
-              <h1 className="text-2xl font-bold text-slate-900">Performance dashboard</h1>
+              <p className="text-[10px] uppercase tracking-[0.28em] text-slate-400">Analytics</p>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-950">Performance dashboard</h1>
             </div>
           </div>
 
@@ -266,14 +266,14 @@ function AnalyticsPage() {
                 onClick={() => setFilter(option.value)}
                 className={`rounded-full px-3 py-2 text-sm font-medium transition ${
                   filter === option.value
-                    ? 'bg-slate-900 text-white shadow-md'
-                    : 'border border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300'
+                    ? 'bg-gradient-to-r from-slate-900 to-slate-700 text-white shadow-lg shadow-slate-200/80'
+                    : 'border border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:text-slate-950'
                 }`}
               >
                 {option.label}
               </button>
             ))}
-            <button type="button" className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700">
+            <button type="button" className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-indigo-200 hover:text-indigo-700">
               <Download className="h-4 w-4" />
               Export
             </button>

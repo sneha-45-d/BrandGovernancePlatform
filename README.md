@@ -56,6 +56,21 @@ copy .env.example .env
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+## Docker Setup
+
+1. Copy `backend/.env.example` to `backend/.env` and set your MongoDB URI, JWT secret, and Google API key. The default Gemini model is `gemini-3.6-flash`; override `GEMINI_MODEL` if needed.
+2. From the project root, build and start the application:
+
+```bash
+docker compose up --build
+```
+
+Open the frontend at `http://localhost:8080`. The API is available at `http://localhost:8000`, and the health check is at `http://localhost:8000/api/health`. Chroma data is stored in the `chroma_data` Docker volume. Stop the services with `docker compose down`; add `--volumes` only if you also intend to delete persisted Chroma data.
+
+The backend expects a reachable MongoDB instance, such as MongoDB Atlas. If using a local MongoDB server, configure `MONGO_URI` to a host address reachable from the container (for Docker Desktop, `host.docker.internal` can reach the host machine).
+
+Content analysis reports are stored in MongoDB and shown in Analysis history. AI correction and analysis use Gemini when `GOOGLE_API_KEY` is configured; otherwise, the app clearly labels its local rule-based fallback, which is not a full AI rewrite or analysis.
+
 ## Environment Notes
 
 - Store MongoDB Atlas and Gemini configuration in `backend/.env`.

@@ -60,13 +60,13 @@ export default function LandingPage() {
 
           <div className="flex items-center gap-3">
             <Link
-              to="/dashboard"
+              to="/signin"
               className="rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:text-slate-950"
             >
               Sign in
             </Link>
             <Link
-              to="/dashboard"
+              to="/signup"
               className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition hover:translate-y-[-1px] hover:shadow-xl hover:shadow-indigo-200/80"
             >
               Book demo
