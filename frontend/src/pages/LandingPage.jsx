@@ -1,312 +1,245 @@
-import { ArrowRight, BarChart3, Bot, CheckCircle2, Gauge, ShieldCheck, Sparkles, Wand2 } from 'lucide-react'
+import {
+  ArrowDown,
+  ArrowRight,
+  Check,
+  CheckCheck,
+  CircleCheck,
+  FileSearch,
+  Fingerprint,
+  Gauge,
+  ShieldCheck,
+  Sparkles,
+  WandSparkles,
+} from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { useAuth } from '../lib/auth-context'
 
-const features = [
+const capabilities = [
   {
-    icon: Gauge,
-    title: 'Brand Consistency Scoring',
-    description: 'Monitor brand quality across campaigns, channels, and creative assets in real time.',
+    icon: Fingerprint,
+    title: 'Make your voice unmistakable',
+    description: 'Bring tone, terminology, and messaging guidance into one shared source of truth.',
+    accent: 'violet',
   },
   {
-    icon: Bot,
-    title: 'AI Content Review',
-    description: 'Detect tone drift, visual inconsistencies, and compliance issues across all content.',
+    icon: FileSearch,
+    title: 'Catch issues before they ship',
+    description: 'Review content for brand consistency and get clear, actionable findings.',
+    accent: 'blue',
   },
   {
-    icon: ShieldCheck,
-    title: 'Governance Controls',
-    description: 'Enforce approvals, naming rules, and legal safeguards before content goes live.',
-  },
-  {
-    icon: Wand2,
-    title: 'Creative Intelligence',
-    description: 'Review asset messaging and ensure alignment with your approved brand system.',
+    icon: WandSparkles,
+    title: 'Move from feedback to better copy',
+    description: 'Use guided corrections to make content clearer while keeping its intent.',
+    accent: 'teal',
   },
 ]
 
-const workflowSteps = [
-  'Upload brand guidelines and approved messaging libraries.',
-  'Review content against tone, legal, and consistency rules.',
-  'Track issues, fix suggestions, and generate explainable reports.',
+const workflow = [
+  { number: '01', title: 'Set your guidelines', icon: ShieldCheck },
+  { number: '02', title: 'Review your content', icon: FileSearch },
+  { number: '03', title: 'Approve with confidence', icon: CheckCheck },
 ]
 
-const metrics = [
-  { label: 'Campaigns tracked', value: '12.4k' },
-  { label: 'Avg. consistency score', value: '94%' },
-  { label: 'Review cycle time', value: '3.2x faster' },
-  { label: 'AI risk alerts', value: '184' },
-]
+function BrandLogo() {
+  return (
+    <Link to="/" className="flex items-center gap-3" aria-label="Brandithm home">
+      <span className="brand-mark flex h-10 w-10 items-center justify-center rounded-[14px] text-lg font-black text-white">B</span>
+      <span className="text-xl font-black tracking-[-0.06em] text-slate-950">BRANDITHM</span>
+    </Link>
+  )
+}
+
+function ReviewPreview() {
+  return (
+    <div className="landing-preview relative mx-auto w-full max-w-[610px]">
+      <div className="landing-preview-glow" />
+      <div className="landing-preview-window relative overflow-hidden rounded-[24px] border border-white/15 bg-slate-950 p-4 text-white shadow-2xl sm:p-6">
+        <div className="flex items-center justify-between border-b border-white/10 pb-4">
+          <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-500/20 text-violet-300">
+              <Sparkles className="h-4 w-4" />
+            </span>
+            <div>
+              <p className="text-sm font-bold text-white">Content review</p>
+              <p className="mt-0.5 text-xs text-slate-400">Brand alignment overview</p>
+            </div>
+          </div>
+          <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-semibold text-emerald-300">
+            Review complete
+          </span>
+        </div>
+
+        <div className="grid gap-4 py-5 sm:grid-cols-[1fr_150px]">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+            <div className="mb-3 flex items-center gap-2 text-xs font-semibold text-slate-300">
+              <FileSearch className="h-3.5 w-3.5 text-violet-300" />
+              Brand voice check
+            </div>
+            <div className="space-y-2.5" aria-hidden="true">
+              <div className="h-2 w-full rounded-full bg-white/10" />
+              <div className="h-2 w-[92%] rounded-full bg-white/10" />
+              <div className="h-2 w-[78%] rounded-full bg-violet-300/50" />
+              <div className="h-2 w-[86%] rounded-full bg-white/10" />
+            </div>
+            <div className="mt-4 flex items-start gap-2 rounded-xl border border-amber-300/15 bg-amber-300/[0.07] p-3">
+              <CircleCheck className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+              <p className="text-xs leading-5 text-slate-300">
+                Review findings and suggested improvements in one place.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-row items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] p-4 sm:flex-col sm:justify-center">
+            <div className="text-center">
+              <div className="mx-auto flex h-[82px] w-[82px] items-center justify-center rounded-full border-[6px] border-emerald-400/70 bg-emerald-400/[0.08]">
+                <Gauge className="h-8 w-8 text-emerald-300" />
+              </div>
+              <p className="mt-2 text-[11px] font-medium text-slate-400">Alignment score</p>
+            </div>
+            <div className="mt-0 flex items-center gap-2 text-xs font-semibold text-emerald-300 sm:mt-4">
+              <Check className="h-3.5 w-3.5" />
+              Ready to review
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between rounded-xl bg-white/[0.04] px-4 py-3">
+          <div className="flex items-center gap-2 text-xs text-slate-300">
+            <ShieldCheck className="h-4 w-4 text-sky-300" />
+            Your team makes the final call.
+          </div>
+          <span className="text-[11px] font-semibold text-violet-300">Brandithm AI</span>
+        </div>
+      </div>
+      <div className="landing-floating-note absolute -bottom-5 -left-2 hidden items-center gap-3 rounded-2xl border border-white/70 bg-white/90 p-3 shadow-xl backdrop-blur sm:flex">
+        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+          <CheckCheck className="h-4 w-4" />
+        </span>
+        <span>
+          <span className="block text-xs font-bold text-slate-900">Review, resolved</span>
+          <span className="mt-0.5 block text-[11px] text-slate-500">A clear next step for every issue</span>
+        </span>
+      </div>
+    </div>
+  )
+}
 
 export default function LandingPage() {
+  const { user } = useAuth()
+  const primaryHref = user ? '/dashboard' : '/signup'
+  const primaryLabel = user ? 'Open your workspace' : 'Get started'
+
   return (
-    <div className="landing-shell min-h-screen bg-slate-50 text-slate-900">
-      <header className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
-        <nav className="flex items-center justify-between rounded-full border border-slate-200/80 bg-white/80 px-4 py-3 shadow-[0_18px_45px_rgba(15,23,42,0.06)] backdrop-blur-xl sm:px-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-950 text-sm font-bold text-white shadow-lg shadow-slate-200">
-              B
-            </div>
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.32em] text-slate-500">Brandithm</p>
-            </div>
-          </div>
-
-          <div className="hidden items-center gap-8 text-sm font-medium text-slate-600 md:flex">
-            <a href="#platform" className="transition hover:text-slate-900">Platform</a>
-            <a href="#solutions" className="transition hover:text-slate-900">Solutions</a>
-            <a href="#insights" className="transition hover:text-slate-900">Insights</a>
-            <a href="#pricing" className="transition hover:text-slate-900">Pricing</a>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <Link
-              to="/signin"
-              className="rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:text-slate-950"
-            >
-              Sign in
+    <main className="landing-shell min-h-screen">
+      <div className="landing-content relative z-10 mx-auto max-w-7xl px-5 pb-12 sm:px-8 lg:px-10">
+        <header className="flex items-center justify-between py-5 pr-24 sm:py-7 sm:pr-36">
+          <BrandLogo />
+          <nav className="flex items-center gap-3 sm:gap-7" aria-label="Main navigation">
+            <a className="hidden text-sm font-semibold text-slate-600 transition hover:text-violet-600 sm:inline" href="#platform">
+              Platform
+            </a>
+            <a className="hidden text-sm font-semibold text-slate-600 transition hover:text-violet-600 sm:inline" href="#workflow">
+              How it works
+            </a>
+            <Link to="/pricing" className="hidden text-sm font-semibold text-slate-600 transition hover:text-violet-600 sm:inline">
+              Pricing
             </Link>
-            <Link
-              to="/signup"
-              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition hover:translate-y-[-1px] hover:shadow-xl hover:shadow-indigo-200/80"
-            >
-              Book demo
-              <ArrowRight className="h-4 w-4" />
+            <Link to={user ? '/dashboard' : '/signin'} className="text-sm font-bold text-slate-700 transition hover:text-violet-600">
+              {user ? 'Workspace' : 'Sign in'}
             </Link>
+          </nav>
+        </header>
+
+        <section className="grid items-center gap-12 pb-20 pt-9 sm:pt-14 lg:grid-cols-[0.94fr_1.06fr] lg:gap-10 lg:pb-28 lg:pt-16">
+          <div className="max-w-2xl">
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-violet-200/80 bg-white/70 px-3.5 py-2 text-xs font-bold text-violet-700 shadow-sm backdrop-blur">
+              <Sparkles className="h-3.5 w-3.5" />
+              A clearer standard for every brand
+            </div>
+            <h1 className="text-[3.4rem] font-black leading-[0.98] tracking-[-0.075em] text-slate-950 sm:text-6xl lg:text-[4.5rem]">
+              Keep every word
+              <span className="landing-gradient-text block">true to your brand.</span>
+            </h1>
+            <p className="mt-6 max-w-xl text-base leading-7 text-slate-600 sm:text-lg sm:leading-8">
+              Bring your guidelines, content reviews, and approvals together. Help every team create consistent work with less back-and-forth.
+            </p>
+            <div className="mt-8 flex flex-wrap items-center gap-3">
+              <Link to={primaryHref} className="landing-primary-button inline-flex items-center gap-2 rounded-xl px-5 py-3.5 text-sm font-bold text-white shadow-lg shadow-violet-500/25">
+                {primaryLabel}
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+              <a href="#platform" className="inline-flex items-center gap-2 rounded-xl border border-slate-300/70 bg-white/60 px-5 py-3.5 text-sm font-bold text-slate-700 transition hover:border-violet-300 hover:bg-white">
+                Explore the platform
+                <ArrowDown className="h-4 w-4" />
+              </a>
+            </div>
+            <div className="mt-8 flex flex-wrap gap-x-5 gap-y-2 text-xs font-medium text-slate-500">
+              <span className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-emerald-600" />Brand guidelines in one place</span>
+              <span className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-emerald-600" />Human-led review decisions</span>
+            </div>
           </div>
-        </nav>
-      </header>
+          <ReviewPreview />
+        </section>
 
-      <main>
-        <section className="mx-auto max-w-7xl px-4 pb-20 pt-10 sm:px-6 lg:px-8 lg:pb-28 lg:pt-16">
-          <div className="grid items-center gap-12 lg:grid-cols-[1.18fr_0.82fr]">
-            <div>
-              <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.28em] text-indigo-700 shadow-sm">
-                <Sparkles className="h-3.5 w-3.5" />
-                AI-powered brand governance
-              </div>
-
-              <h1 className="max-w-xl text-5xl font-black tracking-[-0.06em] text-slate-950 sm:text-6xl lg:text-[5.2rem] lg:leading-[0.96]">
-                Every Brand.
-                <span className="block">One Intelligent</span>
-                <span className="block">Identity.</span>
-              </h1>
-
-              <p className="mt-6 max-w-xl text-lg leading-8 text-slate-600">
-                BRANDITHM helps enterprise marketing teams review, govern, and optimize brand messaging with AI-powered intelligence, content scoring, and enterprise-ready approval workflows.
-              </p>
-
-              <div className="mt-8 flex flex-wrap items-center gap-4">
-                <Link
-                  to="/dashboard"
-                  className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-500 px-6 py-3.5 text-sm font-semibold text-white shadow-[0_24px_35px_rgba(99,102,241,0.28)] transition hover:translate-y-[-1px] hover:shadow-[0_28px_40px_rgba(99,102,241,0.35)]"
-                >
-                  Launch dashboard
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-                <button
-                  type="button"
-                  className="rounded-full border border-slate-200 bg-white px-6 py-3.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:shadow-md"
-                >
-                  Watch overview
-                </button>
-              </div>
-
-              <div className="mt-10 flex flex-wrap gap-4 text-sm text-slate-700">
-                {['AI review', 'Brand health', 'Compliance', 'Creative insights'].map((item) => (
-                  <div
-                    key={item}
-                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-2 shadow-sm backdrop-blur-sm"
-                  >
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                    {item}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="relative">
-              <div className="absolute -left-10 top-8 h-36 w-36 rounded-full bg-indigo-300/60 blur-3xl" />
-              <div className="absolute bottom-0 right-0 h-44 w-44 rounded-full bg-cyan-300/60 blur-3xl" />
-
-              <div className="relative overflow-hidden rounded-[2rem] border border-slate-200 bg-white/90 p-5 shadow-[0_30px_90px_rgba(15,23,42,0.12)] backdrop-blur-sm">
-                <div className="rounded-[1.5rem] bg-slate-950 p-5 text-white shadow-inner">
-                  <div className="mb-6 flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-[10px] uppercase tracking-[0.3em] text-slate-400">Brand score</p>
-                      <h2 className="mt-2 text-4xl font-bold">94.2%</h2>
-                    </div>
-                    <div className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-300">
-                      +8.4% this month
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    {[
-                      ['Messaging consistency', '96%'],
-                      ['Visual alignment', '92%'],
-                      ['Governance compliance', '98%'],
-                    ].map(([label, value]) => (
-                      <div key={label}>
-                        <div className="mb-2 flex items-center justify-between text-[11px] text-slate-300">
-                          <span>{label}</span>
-                          <span>{value}</span>
-                        </div>
-                        <div className="h-2.5 rounded-full bg-white/10">
-                          <div
-                            className="h-full rounded-full bg-gradient-to-r from-indigo-400 via-violet-400 to-cyan-400"
-                            style={{ width: value }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="mt-5 grid grid-cols-2 gap-4">
-                  <div className="rounded-2xl bg-indigo-50 p-4">
-                    <p className="text-[10px] uppercase tracking-[0.25em] text-indigo-500">Content reviewed</p>
-                    <p className="mt-3 text-2xl font-bold text-slate-900">18.7k</p>
-                  </div>
-                  <div className="rounded-2xl bg-emerald-50 p-4">
-                    <p className="text-[10px] uppercase tracking-[0.25em] text-emerald-600">Alerts resolved</p>
-                    <p className="mt-3 text-2xl font-bold text-slate-900">96%</p>
-                  </div>
-                </div>
-              </div>
-            </div>
+        <section id="platform" className="scroll-mt-8 rounded-[30px] border border-white/70 bg-white/55 px-5 py-10 shadow-[0_24px_70px_rgba(54,58,112,0.08)] backdrop-blur sm:px-9 sm:py-14">
+          <div className="mx-auto max-w-2xl text-center">
+            <span className="text-xs font-black uppercase tracking-[0.22em] text-violet-600">One connected workflow</span>
+            <h2 className="mt-3 text-3xl font-black tracking-[-0.055em] text-slate-950 sm:text-4xl">Brand consistency, built into the process.</h2>
+            <p className="mt-4 text-sm leading-6 text-slate-600 sm:text-base">
+              Turn brand standards into practical guidance teams can use while creating and reviewing content.
+            </p>
+          </div>
+          <div className="mt-9 grid gap-4 md:grid-cols-3">
+            {capabilities.map(({ icon: Icon, title, description, accent }) => (
+              <article key={title} className="landing-capability-card rounded-2xl border border-slate-200/70 bg-white/80 p-5 sm:p-6">
+                <span className={`landing-icon landing-icon-${accent} flex h-11 w-11 items-center justify-center rounded-[14px]`}>
+                  <Icon className="h-5 w-5" />
+                </span>
+                <h3 className="mt-5 text-lg font-extrabold tracking-tight text-slate-900">{title}</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
+              </article>
+            ))}
           </div>
         </section>
 
-        <section id="platform" className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
-          <div className="mb-12 text-center">
-            <p className="text-sm font-semibold uppercase tracking-[0.28em] text-indigo-600">Platform overview</p>
-            <h2 className="mt-4 text-3xl font-bold text-slate-900 sm:text-4xl">Designed for modern brand teams</h2>
+        <section id="workflow" className="grid scroll-mt-8 items-center gap-8 py-16 sm:py-20 lg:grid-cols-[0.8fr_1.2fr]">
+          <div>
+            <span className="text-xs font-black uppercase tracking-[0.22em] text-violet-600">Simple by design</span>
+            <h2 className="mt-3 max-w-md text-3xl font-black leading-tight tracking-[-0.055em] text-slate-950 sm:text-4xl">From brand rules to confident approvals.</h2>
+            <p className="mt-4 max-w-md text-sm leading-6 text-slate-600 sm:text-base">
+              Keep your standards visible, your feedback actionable, and your final decisions with your team.
+            </p>
           </div>
-
-          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-            {features.map(({ icon: Icon, title, description }) => (
-              <div
-                key={title}
-                className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-[0_18px_40px_rgba(15,23,42,0.04)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_22px_55px_rgba(79,70,229,0.12)]"
-              >
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-100 to-violet-100 text-indigo-600 shadow-inner">
-                  <Icon className="h-5 w-5" />
+          <div className="grid gap-3 sm:grid-cols-3">
+            {workflow.map(({ number, title, icon: Icon }) => (
+              <div key={number} className="landing-step-card rounded-2xl border border-white/80 bg-white/65 p-5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black tracking-widest text-violet-500">{number}</span>
+                  <Icon className="h-5 w-5 text-violet-500" />
                 </div>
-                <h3 className="text-xl font-semibold text-slate-900">{title}</h3>
-                <p className="mt-3 text-sm leading-7 text-slate-600">{description}</p>
+                <p className="mt-8 text-base font-extrabold leading-snug text-slate-900">{title}</p>
               </div>
             ))}
           </div>
         </section>
 
-        <section id="solutions" className="bg-slate-950 py-20 text-white lg:py-24">
-          <div className="mx-auto grid max-w-7xl gap-10 px-4 sm:px-6 lg:grid-cols-[1fr_1.2fr] lg:px-8">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.3em] text-violet-300">Workflow</p>
-              <h2 className="mt-4 text-3xl font-bold sm:text-4xl">Built to govern the full brand lifecycle.</h2>
-              <p className="mt-5 max-w-lg text-base leading-8 text-slate-300">
-                From uploaded brand assets to final approvals, BRANDITHM gives marketing teams a single control layer for consistency, guidance, and review.
-              </p>
-              <div className="mt-8 space-y-4">
-                {workflowSteps.map((step, index) => (
-                  <div key={step} className="flex items-start gap-4 rounded-2xl border border-white/10 bg-white/5 p-4">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-500/20 text-sm font-semibold text-violet-200">
-                      {index + 1}
-                    </div>
-                    <p className="text-slate-200">{step}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid gap-5 md:grid-cols-2">
-              <div className="rounded-[1.75rem] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
-                <div className="mb-5 flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-200">
-                    <BarChart3 className="h-5 w-5" />
-                  </div>
-                  <p className="font-semibold text-white">Compliance pulse</p>
-                </div>
-                <div className="space-y-5">
-                  {[88, 91, 94, 96].map((value, index) => (
-                    <div key={value + index}>
-                      <div className="mb-2 flex items-center justify-between text-xs text-slate-300">
-                        <span>Channel {index + 1}</span>
-                        <span>{value}%</span>
-                      </div>
-                      <div className="h-2 rounded-full bg-white/10">
-                        <div
-                          className="h-full rounded-full bg-gradient-to-r from-indigo-400 via-violet-400 to-cyan-400"
-                          style={{ width: `${value}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="rounded-[1.75rem] border border-white/10 bg-gradient-to-br from-violet-500/20 to-cyan-500/10 p-6 shadow-[0_20px_50px_rgba(99,102,241,0.16)]">
-                <p className="text-sm uppercase tracking-[0.25em] text-cyan-200">AI findings</p>
-                <h3 className="mt-5 text-4xl font-bold text-white">84</h3>
-                <p className="mt-3 text-sm leading-7 text-slate-200">
-                  Recommended fixes identified across tone, claims, and visual alignment checks.
-                </p>
-                <div className="mt-6 rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-sm text-slate-200">
-                  “Suggested claim update: replace promotional language with approved product claims.”
-                </div>
-              </div>
-            </div>
+        <section className="landing-cta flex flex-col items-start justify-between gap-6 rounded-[26px] px-6 py-8 text-white sm:flex-row sm:items-center sm:px-9 sm:py-9">
+          <div>
+            <h2 className="text-2xl font-black tracking-tight sm:text-3xl">Make brand confidence part of every review.</h2>
+            <p className="mt-2 text-sm text-violet-100">Start building a more consistent content workflow.</p>
           </div>
+          <Link to={primaryHref} className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-white px-5 py-3.5 text-sm font-bold text-violet-700 shadow-lg transition hover:-translate-y-0.5 hover:bg-violet-50">
+            {primaryLabel}
+            <ArrowRight className="h-4 w-4" />
+          </Link>
         </section>
 
-        <section id="insights" className="bg-slate-50 py-20 lg:py-24">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="mb-10 text-center">
-              <p className="text-sm font-semibold uppercase tracking-[0.28em] text-indigo-600">Insights</p>
-              <h2 className="mt-4 text-3xl font-bold text-slate-900 sm:text-4xl">Operational visibility at a glance</h2>
-            </div>
-
-            <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-              {metrics.map((metric) => (
-                <div key={metric.label} className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-[0_18px_40px_rgba(15,23,42,0.04)]">
-                  <p className="text-sm text-slate-500">{metric.label}</p>
-                  <p className="mt-4 text-4xl font-bold tracking-tight text-slate-950">{metric.value}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <footer id="pricing" className="bg-slate-950 text-white">
-          <div className="mx-auto flex max-w-7xl flex-col gap-8 px-4 py-12 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
-            <div>
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-sm font-bold text-slate-950">B</div>
-                <div>
-                  <p className="text-[10px] uppercase tracking-[0.3em] text-slate-400">Brandithm</p>
-                </div>
-              </div>
-              <p className="mt-4 max-w-md text-sm leading-7 text-slate-300">
-                Every Brand. One Intelligent Identity.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-4">
-              <a href="#platform" className="text-sm text-slate-300 transition hover:text-white">Platform</a>
-              <a href="#solutions" className="text-sm text-slate-300 transition hover:text-white">Solutions</a>
-              <a href="#insights" className="text-sm text-slate-300 transition hover:text-white">Insights</a>
-            </div>
-
-            <Link
-              to="/dashboard"
-              className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-200"
-            >
-              Get started
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
+        <footer className="flex flex-col items-center justify-between gap-3 py-8 text-xs text-slate-500 sm:flex-row">
+          <BrandLogo />
+          <p>Brandithm · A thoughtful way to govern your brand voice.</p>
+          <Link to="/signin" className="font-semibold text-slate-600 transition hover:text-violet-600">Sign in</Link>
         </footer>
-      </main>
-    </div>
+      </div>
+    </main>
   )
 }

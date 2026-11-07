@@ -9,6 +9,7 @@ Brandithm is a brand governance platform for reviewing written content against a
 - [Run locally](#run-locally)
 - [Configuration](#configuration)
 - [Persistence and database fallback](#persistence-and-database-fallback)
+- [Deploy to Netlify](#deploy-to-netlify)
 - [Run with Docker](#run-with-docker)
 - [Application routes](#application-routes)
 - [API and checks](#api-and-checks)
@@ -104,6 +105,7 @@ Backend settings are read from `backend/.env`. The checked-in `backend/.env.exam
 | `GEMINI_MODEL` | Gemini model name; defaults to `gemini-3.6-flash`. |
 | `CHROMA_DB_PATH` | Chroma data directory; defaults to `backend/app/data/chroma`. |
 | `ALLOWED_ORIGINS` | Comma-separated browser origins permitted by the API. |
+| `VITE_API_BASE_URL` | Frontend build-time variable. Set it to the deployed FastAPI origin in the frontend host (for example `https://api.example.com`); leave it blank for local Vite development. Do not add a trailing `/api`. |
 
 For MongoDB Atlas, use a **database user** in the connection URI, not your Atlas website login. Ensure the deployment's IP is allowed in the Atlas network access list. URI-encode reserved characters in the database username or password.
 
@@ -114,6 +116,20 @@ When MongoDB is reachable, the API uses it for application data. If MongoDB cann
 The SQLite fallback belongs to the backend server and is not shared between multiple server instances. Configure `LOCAL_DB_PATH` and persistent disk/volume storage for deployments. Browser-local drafts or accounts are device-specific and are not synchronized between browsers or devices.
 
 The rule-based AI fallback can still perform basic checks, but it is not equivalent to Gemini analysis or a full AI rewrite. Configure a valid Google API key to enable Gemini features.
+
+## Deploy to Netlify
+
+The repository includes a `netlify.toml` configured to build the Vite frontend from `frontend/`, publish `frontend/dist`, use Node.js 22, and rewrite client-side routes to `index.html`. This lets both `/` and direct links such as `/signin` load correctly on Netlify.
+
+Netlify hosts the **frontend only**. It does not run this repository's FastAPI backend. To use sign-in, analysis, guidelines, and review APIs on a deployed site:
+
+1. Deploy the `backend/` service separately to a host that supports Python/FastAPI or Docker.
+2. Configure the backend's MongoDB, AI, and persistence environment variables on that host. Keep all secrets there, not in frontend variables.
+3. Set `ALLOWED_ORIGINS` on the backend to include your exact Netlify site origin (for example `https://your-site.netlify.app`).
+4. In Netlify, set the build environment variable `VITE_API_BASE_URL` to the backend's HTTPS origin (for example `https://your-api.example.com`), without a trailing `/api`, then trigger a new deploy. Vite compiles this value into the frontend build.
+5. Confirm the backend health endpoint is reachable at `https://your-api.example.com/api/health`.
+
+If the backend URL is missing or unreachable, the static landing page can still load, but application API requests will not reach FastAPI. No Netlify deployment log or deployed-site URL was included with this change, so the exact failure from a specific deployment cannot be confirmed here; this configuration addresses the missing frontend build/routing setup and makes the backend connection explicit.
 
 ## Run with Docker
 
@@ -132,6 +148,7 @@ Docker Compose persists Chroma data in the `chroma_data` named volume. The SQLit
 
 | Route | Description |
 | --- | --- |
+| `/` | Public landing page. |
 | `/signin` | Sign in to an account. |
 | `/signup` | Create an account. |
 | `/dashboard` | Dashboard overview and recent activity. |

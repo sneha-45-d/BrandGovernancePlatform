@@ -314,6 +314,61 @@ body[data-theme='dark'] .auth-reference-shell .hover\:text-violet-500:hover {
   overflow: hidden;
 }
 
+.landing-gradient-text {
+  background: linear-gradient(95deg, #7c3aed 0%, #4f46e5 48%, #0284c7 100%);
+  background-clip: text;
+  color: transparent;
+}
+
+.landing-primary-button {
+  background: linear-gradient(110deg, #6d4aff 0%, #4f46e5 55%, #2563eb 100%);
+}
+
+.landing-primary-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 34px rgba(79, 70, 229, 0.32);
+}
+
+.landing-preview-glow {
+  position: absolute;
+  inset: 12% 8%;
+  border-radius: 50%;
+  background: linear-gradient(120deg, rgba(124, 58, 237, 0.4), rgba(14, 165, 233, 0.32));
+  filter: blur(55px);
+}
+
+.landing-capability-card,
+.landing-step-card {
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.035);
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.landing-capability-card:hover,
+.landing-step-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 20px 46px rgba(79, 70, 229, 0.11);
+}
+
+.landing-icon-violet {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.landing-icon-blue {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.landing-icon-teal {
+  background: #ccfbf1;
+  color: #0f766e;
+}
+
+.landing-cta {
+  background: linear-gradient(115deg, #312e81 0%, #5b21b6 52%, #4338ca 100%);
+  box-shadow: 0 24px 55px rgba(67, 56, 202, 0.2);
+}
+
 .dashboard-shell::before,
 .analytics-shell::before,
 .landing-shell::before {
@@ -325,6 +380,21 @@ body[data-theme='dark'] .auth-reference-shell .hover\:text-violet-500:hover {
     radial-gradient(circle at 85% 25%, rgba(45, 212, 191, 0.12), transparent 20%),
     radial-gradient(circle at 70% 80%, rgba(168, 85, 247, 0.12), transparent 22%);
   pointer-events: none;
+}
+
+body[data-theme='dark'] .landing-icon-violet {
+  background: rgba(139, 92, 246, 0.2);
+  color: #c4b5fd;
+}
+
+body[data-theme='dark'] .landing-icon-blue {
+  background: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+}
+
+body[data-theme='dark'] .landing-icon-teal {
+  background: rgba(20, 184, 166, 0.2);
+  color: #99f6e4;
 }
 
 .surface-panel,

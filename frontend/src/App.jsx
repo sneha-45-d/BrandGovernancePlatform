@@ -11,6 +11,7 @@ import BrandIntelligencePage from './pages/BrandIntelligencePage'
 import BrandGuidelinesPage from './pages/BrandGuidelinesPage'
 import ReviewQueuePage from './pages/ReviewQueuePage'
 import AccountSettingsPage from './pages/AccountSettingsPage'
+import LandingPage from './pages/LandingPage'
 import { AuthProvider } from './lib/AuthContext'
 import { useAuth } from './lib/auth-context'
 
@@ -45,7 +46,7 @@ function AppShell() {
       </button>
 
       <Routes>
-        <Route path="/" element={<Navigate to="/signin" replace />} />
+        <Route path="/" element={<LandingPage />} />
         <Route path="/pricing" element={<PricingPage />} />
         <Route path="/signin" element={<AuthPage mode="signin" />} />
         <Route path="/signup" element={<AuthPage mode="signup" />} />
