@@ -44,7 +44,7 @@ export default function Sidebar({ score = null }) {
   return (
     <aside className="sidebar-shell w-full rounded-[1.8rem] p-5 text-white shadow-[0_22px_60px_rgba(15,23,42,0.18)] lg:w-72">
       <div className="mb-8 flex items-center gap-3">
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-500 text-lg font-bold text-white shadow-lg shadow-indigo-500/25">
+        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-green-500 text-lg font-bold text-white shadow-lg shadow-emerald-500/25">
           B
         </div>
         <div>
@@ -74,10 +74,10 @@ export default function Sidebar({ score = null }) {
         })}
       </nav>
 
-      <div className="mt-8 rounded-2xl border border-indigo-500/35 bg-gradient-to-br from-indigo-500/15 to-violet-500/10 p-4 shadow-inner shadow-indigo-500/10">
-        <p className="text-[10px] uppercase tracking-[0.25em] text-indigo-200">Score</p>
+      <div className="mt-8 rounded-2xl border border-emerald-500/35 bg-gradient-to-br from-emerald-500/15 to-green-500/10 p-4 shadow-inner shadow-emerald-500/10">
+        <p className="text-[10px] uppercase tracking-[0.25em] text-emerald-200">Score</p>
         <p className="mt-2 text-3xl font-bold text-white">{score === null ? '—' : `${Math.round(Number(score))}%`}</p>
-        <p className="mt-1 text-sm text-indigo-100">
+        <p className="mt-1 text-sm text-emerald-100">
           {score === null ? 'Run a review to see your score.' : 'Average score from your content reviews.'}
         </p>
       </div>
