@@ -18,9 +18,11 @@ class Settings:
     GOOGLE_API_KEY = (os.getenv('GOOGLE_API_KEY') or os.getenv('GEMINI_API_KEY') or '').strip()
     GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-3.6-flash')
     CHROMA_DB_PATH = os.getenv('CHROMA_DB_PATH', str(BASE_DIR / 'app' / 'data' / 'chroma'))
+
+    _raw_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:5173,http://localhost:8080,http://127.0.0.1:5173')
     ALLOWED_ORIGINS = [
-        origin.strip()
-        for origin in os.getenv('ALLOWED_ORIGINS', 'http://localhost:5173').split(',')
+        origin.strip().rstrip('/')
+        for origin in _raw_origins.split(',')
         if origin.strip()
     ]
 

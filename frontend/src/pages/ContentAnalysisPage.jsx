@@ -9,10 +9,13 @@ import {
   Sparkles,
   Upload,
   Wand2,
+  Trophy,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
+import ToneAnalysisPanel from '../components/ToneAnalysisPanel'
+import ClashAlert from '../components/ClashAlert'
 import {
   defaultGuidelines,
   getCurrentUserId,
@@ -180,14 +183,20 @@ export default function ContentAnalysisPage() {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
 
-      setAnalysis(response.data.analysis)
+      const analysisResult = {
+        ...response.data.analysis,
+        clash_report: response.data.clash_report || response.data.analysis?.clash_report,
+        champion_update: response.data.champion_update,
+      }
+
+      setAnalysis(analysisResult)
       setActiveReportId(response.data.report_id || null)
       const localEntry = saveLocalAnalysis({
         reportId: response.data.report_id,
         title: selectedFile ? selectedFile.name : 'Marketing copy review',
         brandName: guidelines.brand_name,
         content,
-        analysis: response.data.analysis,
+        analysis: analysisResult,
       })
       setHistory((current) => [
         {
@@ -495,6 +504,31 @@ export default function ContentAnalysisPage() {
 
             {analysis && (
               <section className="space-y-6">
+                {/* Champion Points Toast */}
+                {analysis.champion_update && (
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-amber-300 bg-gradient-to-r from-amber-50 via-yellow-50 to-orange-50 p-4 text-amber-950 shadow-xs">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500 text-white shadow-sm">
+                        <Trophy className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-wider text-amber-800">Brand Champion Reward</p>
+                        <p className="text-sm font-semibold">
+                          +{analysis.champion_update.points_earned} points earned! Total Score: {analysis.champion_update.champion_score} pts ({analysis.champion_update.streak_days}-day streak)
+                        </p>
+                      </div>
+                    </div>
+                    {(analysis.champion_update.new_badges || []).length > 0 && (
+                      <div className="flex items-center gap-1.5 rounded-full bg-amber-200/70 px-3 py-1 text-xs font-bold text-amber-900">
+                        <span>🏆 Badge Unlocked: {analysis.champion_update.new_badges.join(', ')}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Competitor IP Clash Alert */}
+                <ClashAlert clashReport={analysis.clash_report} />
+
                 {analysis.warning && (
                   <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
                     <p className="font-semibold">
@@ -522,6 +556,11 @@ export default function ContentAnalysisPage() {
                     </div>
                   ))}
                 </div>
+
+                {/* Multi-Dimensional Tone Analysis */}
+                {analysis.tone_analysis && (
+                  <ToneAnalysisPanel toneData={analysis.tone_analysis} />
+                )}
 
                 <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
                   <div className="surface-panel rounded-[2rem] p-6 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
