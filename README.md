@@ -1,83 +1,175 @@
-# BRANDITHM
+# Brandithm
 
-AI-Powered Brand Governance and Intelligence Platform for Automated Content Review and Consistency.
+Brandithm is a brand governance platform for reviewing written content against a brand's voice, terminology, and communication guidelines. It combines a React dashboard with a FastAPI service, Gemini-powered analysis when configured, and persistent storage for accounts, guidelines, review decisions, and analysis history.
 
-## Project Overview
+## Contents
 
-BRANDITHM is an enterprise-grade SaaS platform designed to help teams monitor and manage brand consistency, analyze content quality, and enforce brand guidelines with AI-assisted review workflows.
+- [Features](#features)
+- [Technology](#technology)
+- [Run locally](#run-locally)
+- [Configuration](#configuration)
+- [Persistence and database fallback](#persistence-and-database-fallback)
+- [Run with Docker](#run-with-docker)
+- [Application routes](#application-routes)
+- [API and checks](#api-and-checks)
+- [Project structure](#project-structure)
 
-## Product Vision
+## Features
 
-- Upload and manage brand guidelines
-- Review content for tone, terminology, and messaging consistency
-- Detect unsupported claims and content violations
-- Analyze visual branding alignment
-- Generate explainable compliance scores and review reports
-- Support enterprise brand governance workflows
+- Sign up, sign in, account settings, and sign out.
+- Dashboard and Brand Intelligence views for reviewing recent activity and brand health.
+- Editable Brand Guidelines shared with content analysis and AI correction.
+- Content analysis with scores, detected issues, recommendations, and review history.
+- AI-assisted content correction.
+- Review Queue actions to approve a report or request revisions.
+- Light and dark themes.
+- Gemini-backed analysis and correction when a Google AI API key is configured; local rule-based checks are used when Gemini is unavailable.
 
-## Folder Structure
+## Technology
 
-```text
-BRANDITHM/
-├── frontend/
-│   ├── src/
-│   ├── public/
-│   ├── package.json
-│   ├── package-lock.json
-│   ├── vite.config.js
-│   ├── eslint.config.js
-│   └── index.html
-├── backend/
-│   ├── app/
-│   ├── .env.example
-│   ├── requirements.txt
-│   └── .venv/
-├── README.md
-├── .gitignore
-└── .env.example (optional project-level env reference)
+- **Frontend:** React, Vite, React Router, Tailwind CSS
+- **Backend:** Python, FastAPI, Uvicorn
+- **Data:** MongoDB (PyMongo), with a server-local SQLite fallback
+- **AI:** Google Gemini API (optional)
+
+## Run locally
+
+You will need Node.js/npm and Python installed. Run the frontend and backend in separate terminals.
+
+### 1. Configure the backend
+
+From the repository root, create a virtual environment and install the backend packages:
+
+```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+Copy-Item .env.example .env
 ```
 
-## Frontend Setup
+Edit `backend/.env` and set at least a secure `JWT_SECRET_KEY`. Configure `MONGO_URI` if you want to use MongoDB, and `GOOGLE_API_KEY` if you want Gemini-powered analysis and correction. See [Configuration](#configuration) for details.
 
-```bash
+Start the API from the `backend` directory:
+
+```powershell
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### 2. Start the frontend
+
+In a second terminal:
+
+```powershell
 cd frontend
 npm install
-npm run dev -- --host 0.0.0.0
+npm run dev
 ```
 
-## Backend Setup
+Open [http://localhost:5173](http://localhost:5173). The root route redirects to sign in; create an account at `/signup`. Vite forwards `/api` requests to `http://localhost:8000`.
+
+### macOS/Linux shell
+
+Use the equivalent commands below if you are not using PowerShell:
 
 ```bash
 cd backend
 python -m venv .venv
-.venv\Scripts\activate
+source .venv/bin/activate
 pip install -r requirements.txt
-copy .env.example .env
+cp .env.example .env
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-## Docker Setup
+In another terminal:
 
-1. Copy `backend/.env.example` to `backend/.env` and set your MongoDB URI, JWT secret, and Google API key. The default Gemini model is `gemini-3.6-flash`; override `GEMINI_MODEL` if needed.
-2. From the project root, build and start the application:
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+## Configuration
+
+Backend settings are read from `backend/.env`. The checked-in `backend/.env.example` is a template; never commit real credentials.
+
+| Variable | Purpose |
+| --- | --- |
+| `PORT` | Backend port; defaults to `8000`. |
+| `MONGO_URI` | MongoDB connection URI. Defaults to local MongoDB at `mongodb://localhost:27017`. |
+| `DB_NAME` | MongoDB database name; defaults to `brandithm`. |
+| `LOCAL_DB_PATH` | Optional SQLite fallback path. Defaults to `backend/data/brandithm.sqlite3` for a local run. |
+| `JWT_SECRET_KEY` | Secret used for session/authentication security. Set a long, unique value outside development. |
+| `GOOGLE_API_KEY` | Optional Google AI API key for Gemini. `GEMINI_API_KEY` is also accepted. |
+| `GEMINI_MODEL` | Gemini model name; defaults to `gemini-3.6-flash`. |
+| `CHROMA_DB_PATH` | Chroma data directory; defaults to `backend/app/data/chroma`. |
+| `ALLOWED_ORIGINS` | Comma-separated browser origins permitted by the API. |
+
+For MongoDB Atlas, use a **database user** in the connection URI, not your Atlas website login. Ensure the deployment's IP is allowed in the Atlas network access list. URI-encode reserved characters in the database username or password.
+
+## Persistence and database fallback
+
+When MongoDB is reachable, the API uses it for application data. If MongoDB cannot be reached, the backend uses SQLite for accounts, sessions, brand guidelines, analysis history, and review decisions. The default local database file is `backend/data/brandithm.sqlite3`; it is ignored by Git.
+
+The SQLite fallback belongs to the backend server and is not shared between multiple server instances. Configure `LOCAL_DB_PATH` and persistent disk/volume storage for deployments. Browser-local drafts or accounts are device-specific and are not synchronized between browsers or devices.
+
+The rule-based AI fallback can still perform basic checks, but it is not equivalent to Gemini analysis or a full AI rewrite. Configure a valid Google API key to enable Gemini features.
+
+## Run with Docker
+
+1. Copy `backend/.env.example` to `backend/.env` and configure the backend values.
+2. From the repository root, build and start the services:
 
 ```bash
 docker compose up --build
 ```
 
-Open the frontend at `http://localhost:8080`. The API is available at `http://localhost:8000`, and the health check is at `http://localhost:8000/api/health`. Chroma data is stored in the `chroma_data` Docker volume. Stop the services with `docker compose down`; add `--volumes` only if you also intend to delete persisted Chroma data.
+Open the frontend at [http://localhost:8080](http://localhost:8080). The API is at [http://localhost:8000](http://localhost:8000), with health status at `/api/health` and interactive API documentation at `/docs`.
 
-The backend expects a reachable MongoDB instance, such as MongoDB Atlas. If using a local MongoDB server, configure `MONGO_URI` to a host address reachable from the container (for Docker Desktop, `host.docker.internal` can reach the host machine).
+Docker Compose persists Chroma data in the `chroma_data` named volume. The SQLite fallback database is **not** mounted by the provided Compose file, so add a persistent mount for `/app/data` (or set `LOCAL_DB_PATH` to a mounted location) if you need that data to survive container replacement. Stop the services with `docker compose down`; use `docker compose down --volumes` only if you intend to delete the Chroma volume as well.
 
-Content analysis reports are stored in MongoDB and shown in Analysis history. AI correction and analysis use Gemini when `GOOGLE_API_KEY` is configured; otherwise, the app clearly labels its local rule-based fallback, which is not a full AI rewrite or analysis.
+## Application routes
 
-## Environment Notes
+| Route | Description |
+| --- | --- |
+| `/signin` | Sign in to an account. |
+| `/signup` | Create an account. |
+| `/dashboard` | Dashboard overview and recent activity. |
+| `/analytics` | Analytics view. |
+| `/brand-intelligence` | Brand health and intelligence. |
+| `/brand-guidelines` | View and edit brand voice and content rules. |
+| `/content-analysis` | Analyze submitted content and view results. |
+| `/ai-correction` | Generate a brand-aligned correction. |
+| `/review-queue` | Review analysis reports and approve or request revisions. |
+| `/settings` | Update account information or sign out. |
 
-- Store MongoDB Atlas and Gemini configuration in `backend/.env`.
-- Do not expose secrets in frontend code.
-- Frontend runs on `http://localhost:5173` by default.
-- Backend API runs on `http://localhost:8000` by default.
+## API and checks
 
-## Current Phase
+- API health: `GET /api/health`
+- Interactive OpenAPI documentation: `http://localhost:8000/docs`
+- Frontend lint: `cd frontend; npm run lint`
+- Frontend production build: `cd frontend; npm run build`
+- Backend syntax check: `cd backend; python -m compileall app`
 
-This project is in the frontend UI and platform scaffolding stage, focusing on a premium enterprise SaaS interface, routing, dashboard design, Tailwind styling, and API-ready architecture.
+## Project structure
+
+```text
+Brandithm/
+├── backend/
+│   ├── app/
+│   │   ├── database/     # MongoDB connection and SQLite fallback
+│   │   ├── routes/       # Authentication, brand, content, and health APIs
+│   │   ├── config.py
+│   │   └── main.py
+│   ├── .env.example
+│   └── requirements.txt
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── lib/
+│   │   └── pages/
+│   ├── package.json
+│   └── vite.config.js
+├── docker-compose.yml
+└── README.md
+```

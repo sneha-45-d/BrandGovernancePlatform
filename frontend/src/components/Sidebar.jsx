@@ -9,23 +9,37 @@ import {
   ShieldCheck,
   Sparkles,
   Wand2,
+  LogOut,
 } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
+import { useAuth } from '../lib/auth-context'
+import { useState } from 'react'
 
 const items = [
   { label: 'Overview', icon: LayoutDashboard, to: '/dashboard' },
-  { label: 'Brand Intelligence', icon: Sparkles, to: '/dashboard' },
-  { label: 'Brand Guidelines', icon: BookOpenText, to: '/dashboard' },
+  { label: 'Brand Intelligence', icon: Sparkles, to: '/brand-intelligence' },
+  { label: 'Brand Guidelines', icon: BookOpenText, to: '/brand-guidelines' },
   { label: 'Content Analysis', icon: FileText, to: '/content-analysis' },
-  { label: 'Review Queue', icon: MessageSquareText, to: '/dashboard' },
+  { label: 'Review Queue', icon: MessageSquareText, to: '/review-queue' },
   { label: 'AI Corrections', icon: Wand2, to: '/ai-correction' },
   { label: 'Analytics', icon: BarChart3, to: '/analytics' },
   { label: 'Reports', icon: Gauge, to: '/dashboard' },
-  { label: 'Settings', icon: Settings, to: '/dashboard' },
+  { label: 'Settings', icon: Settings, to: '/settings' },
 ]
 
-export default function Sidebar() {
+export default function Sidebar({ score = null }) {
   const location = useLocation()
+  const { user, signOut } = useAuth()
+  const [logoutError, setLogoutError] = useState('')
+
+  const handleSignOut = async () => {
+    setLogoutError('')
+    try {
+      await signOut()
+    } catch (error) {
+      setLogoutError(error?.response?.data?.detail || 'Signed out on this device, but the server session could not be ended.')
+    }
+  }
 
   return (
     <aside className="sidebar-shell w-full rounded-[1.8rem] p-5 text-white shadow-[0_22px_60px_rgba(15,23,42,0.18)] lg:w-72">
@@ -62,8 +76,23 @@ export default function Sidebar() {
 
       <div className="mt-8 rounded-2xl border border-indigo-500/35 bg-gradient-to-br from-indigo-500/15 to-violet-500/10 p-4 shadow-inner shadow-indigo-500/10">
         <p className="text-[10px] uppercase tracking-[0.25em] text-indigo-200">Score</p>
-        <p className="mt-2 text-3xl font-bold text-white">94%</p>
-        <p className="mt-1 text-sm text-indigo-100">Brand consistency is trending up.</p>
+        <p className="mt-2 text-3xl font-bold text-white">{score === null ? '—' : `${Math.round(Number(score))}%`}</p>
+        <p className="mt-1 text-sm text-indigo-100">
+          {score === null ? 'Run a review to see your score.' : 'Average score from your content reviews.'}
+        </p>
+      </div>
+      <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4">
+        <p className="text-[10px] uppercase tracking-[0.25em] text-slate-400">Signed in as</p>
+        <p className="mt-2 truncate text-sm font-semibold text-white">{user?.full_name || 'Account'}</p>
+        <p className="truncate text-xs text-slate-300">{user?.email}</p>
+        {logoutError && <p role="alert" className="mt-2 text-xs text-amber-200">{logoutError}</p>}
+        <button
+          type="button"
+          onClick={handleSignOut}
+          className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-slate-200 transition hover:text-white"
+        >
+          <LogOut className="h-4 w-4" /> Log out
+        </button>
       </div>
     </aside>
   )

@@ -7,11 +7,14 @@ import {
   Mail,
   ShieldCheck,
   Sparkles,
-  Star,
   Zap,
+  UserRound,
 } from 'lucide-react'
-import { useState } from 'react'
+import axios from 'axios'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useAuth } from '../lib/auth-context'
+import { loginLocalAccount, registerLocalAccount } from '../lib/localAuth'
 
 const brandFeatures = [
   { icon: Sparkles, text: 'AI-Powered Brand Intelligence' },
@@ -22,7 +25,9 @@ const brandFeatures = [
 export default function AuthPage({ mode = 'signin' }) {
   const isSignIn = mode === 'signin'
   const navigate = useNavigate()
+  const { user, signIn, isLoading: checkingSession } = useAuth()
   const [formData, setFormData] = useState({
+    full_name: '',
     email: '',
     password: '',
     rememberMe: false,
@@ -30,6 +35,10 @@ export default function AuthPage({ mode = 'signin' }) {
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+
+  useEffect(() => {
+    if (!checkingSession && user) navigate('/dashboard', { replace: true })
+  }, [checkingSession, navigate, user])
 
   const handleChange = (event) => {
     const { name, value, type, checked } = event.target
@@ -40,32 +49,63 @@ export default function AuthPage({ mode = 'signin' }) {
     setError('')
   }
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault()
 
-    if (!formData.email || !formData.password) {
-      setError('Please enter both your work email and password.')
-      return
-    }
-
-    if (!formData.email.includes('@')) {
-      setError('Please enter a valid work email address.')
+    if ((!isSignIn && !formData.full_name.trim()) || !formData.email || !formData.password) {
+      setError(isSignIn ? 'Please enter both your email and password.' : 'Please enter your name, email, and password.')
       return
     }
 
     setIsSubmitting(true)
     setError('')
-
-    setTimeout(() => {
+    try {
+      const endpoint = isSignIn ? '/api/auth/login' : '/api/auth/register'
+      const payload = isSignIn
+        ? { email: formData.email, password: formData.password }
+        : { full_name: formData.full_name.trim(), email: formData.email, password: formData.password }
+      let session
+      try {
+        const { data } = await axios.post(endpoint, payload, { timeout: 8000 })
+        session = data
+      } catch (requestError) {
+        if (requestError.response?.status === 409 || requestError.response?.status === 422) {
+          throw requestError
+        }
+        if (isSignIn) {
+          session = await loginLocalAccount(payload)
+          try {
+            const { data } = await axios.post('/api/auth/register', {
+              full_name: session.user.full_name,
+              email: payload.email,
+              password: payload.password,
+            }, { timeout: 8000 })
+            session = data
+          } catch (migrationError) {
+            if (migrationError.response?.status !== 409) {
+              console.warn('Local account could not be migrated to app-server storage.')
+            }
+          }
+        } else {
+          session = await registerLocalAccount(payload)
+        }
+      }
+      signIn(session, formData.rememberMe)
+      navigate('/dashboard', { replace: true })
+    } catch (requestError) {
+      setError(
+        requestError.response?.data?.detail || requestError.message ||
+          'Could not connect to the account service. Check that the backend and database are running.'
+      )
+    } finally {
       setIsSubmitting(false)
-      navigate('/dashboard')
-    }, 500)
+    }
   }
 
   return (
     <div className="auth-reference-shell min-h-screen overflow-hidden">
       <div className="auth-reference-inner mx-auto min-h-screen max-w-[1400px] px-4 py-6 sm:px-6 lg:px-10">
-        <header className="mb-8 flex items-center justify-between px-2 sm:px-4">
+        <header className="mb-8 flex items-center justify-between px-2 pr-24 sm:px-4 sm:pr-24">
           <div className="flex items-center gap-3">
             <div className="brand-mark flex h-11 w-11 items-center justify-center rounded-[14px] text-lg font-black text-white shadow-[0_12px_30px_rgba(123,92,255,0.35)]">
               B
@@ -115,8 +155,8 @@ export default function AuthPage({ mode = 'signin' }) {
               <div className="text-[0.7rem] font-bold uppercase tracking-[0.28em] text-slate-500">
                 {isSignIn ? 'Sign In' : 'Create Account'}
               </div>
-              <Link to="/" className="inline-flex items-center gap-1 text-sm font-semibold text-violet-600 transition hover:text-violet-500">
-                <span>Home</span>
+              <Link to={isSignIn ? '/signup' : '/signin'} className="inline-flex items-center gap-1 text-sm font-semibold text-violet-600 transition hover:text-violet-500">
+                <span>{isSignIn ? 'Create account' : 'Sign in'}</span>
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
@@ -132,6 +172,22 @@ export default function AuthPage({ mode = 'signin' }) {
             </p>
 
             <form className="space-y-4" onSubmit={handleSubmit} noValidate>
+              {!isSignIn && (
+                <div className="auth-field flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5">
+                  <UserRound className="h-5 w-5 text-slate-400" />
+                  <input
+                    type="text"
+                    name="full_name"
+                    value={formData.full_name}
+                    onChange={handleChange}
+                    autoComplete="name"
+                    placeholder="Full name"
+                    maxLength={120}
+                    required
+                    className="w-full border-0 bg-transparent text-base text-slate-800 placeholder:text-slate-400 focus:outline-none"
+                  />
+                </div>
+              )}
               <div className="auth-field flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5">
                 <Mail className="h-5 w-5 text-slate-400" />
                 <input
@@ -139,7 +195,9 @@ export default function AuthPage({ mode = 'signin' }) {
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
+                  autoComplete="email"
                   placeholder="Work Email"
+                  required
                   className="w-full border-0 bg-transparent text-base text-slate-800 placeholder:text-slate-400 focus:outline-none"
                 />
               </div>
@@ -151,7 +209,10 @@ export default function AuthPage({ mode = 'signin' }) {
                   name="password"
                   value={formData.password}
                   onChange={handleChange}
+                  autoComplete={isSignIn ? 'current-password' : 'new-password'}
                   placeholder="Password"
+                  minLength={isSignIn ? 1 : 8}
+                  required
                   className="w-full border-0 bg-transparent text-base text-slate-800 placeholder:text-slate-400 focus:outline-none"
                 />
                 <button
@@ -176,9 +237,7 @@ export default function AuthPage({ mode = 'signin' }) {
                     />
                     <span>Remember Me</span>
                   </label>
-                  <Link to="/signin" className="font-semibold text-violet-600 hover:text-violet-500">
-                    Forgot Password?
-                  </Link>
+                  <span className="text-xs text-slate-400">Use your registered email</span>
                 </div>
               )}
 
@@ -212,21 +271,6 @@ export default function AuthPage({ mode = 'signin' }) {
                 <span>SOC 2 Ready</span>
               </div>
             </div>
-
-            <div className="mt-5 flex items-center gap-3">
-              <div className="h-px flex-1 bg-slate-200" />
-              <span className="text-[0.7rem] font-semibold uppercase tracking-[0.3em] text-slate-400">or</span>
-              <div className="h-px flex-1 bg-slate-200" />
-            </div>
-
-            <button
-              type="button"
-              onClick={() => navigate('/dashboard')}
-              className="mt-5 flex w-full items-center justify-center gap-2 rounded-[18px] border border-slate-200 bg-white px-4 py-3 text-base font-semibold text-slate-700 shadow-[0_8px_18px_rgba(15,23,42,0.04)] transition hover:border-violet-200 hover:text-violet-700"
-            >
-              <LockKeyhole className="h-4 w-4" />
-              Continue with SSO
-            </button>
 
             <p className="mt-5 text-center text-base text-slate-500">
               {isSignIn ? 'Need an account? ' : 'Already have an account? '}

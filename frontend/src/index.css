@@ -164,6 +164,13 @@ body[data-theme='dark'] input[type='search'] {
     linear-gradient(180deg, #f1effd 0%, #eef3ff 100%);
 }
 
+body[data-theme='dark'] .auth-reference-shell {
+  background:
+    radial-gradient(circle at top left, rgba(124, 58, 237, 0.18), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(59, 130, 246, 0.16), transparent 30%),
+    linear-gradient(180deg, #080d1c 0%, #111827 100%);
+}
+
 .auth-reference-shell::before,
 .auth-reference-shell::after {
   content: '';
@@ -228,6 +235,12 @@ body[data-theme='dark'] input[type='search'] {
   position: relative;
 }
 
+body[data-theme='dark'] .auth-form-panel {
+  background: rgba(15, 23, 42, 0.96);
+  border-color: rgba(148, 163, 184, 0.24);
+  box-shadow: 0 24px 60px rgba(2, 6, 23, 0.55);
+}
+
 .auth-field {
   transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
@@ -236,6 +249,50 @@ body[data-theme='dark'] input[type='search'] {
   border-color: rgba(124, 58, 237, 0.35);
   box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.08);
   background: rgba(255, 255, 255, 0.96);
+}
+
+body[data-theme='dark'] .auth-field,
+body[data-theme='dark'] .auth-field:focus-within {
+  background: rgba(2, 6, 23, 0.5);
+  border-color: rgba(148, 163, 184, 0.3);
+}
+
+body[data-theme='dark'] .auth-field:focus-within {
+  border-color: rgba(167, 139, 250, 0.75);
+  box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.16);
+}
+
+body[data-theme='dark'] .auth-field input {
+  color: #f8fafc;
+  caret-color: #c4b5fd;
+}
+
+body[data-theme='dark'] .auth-field input::placeholder {
+  color: #94a3b8;
+  opacity: 1;
+}
+
+body[data-theme='dark'] .auth-reference-shell .bg-emerald-50\/80 {
+  background: rgba(6, 78, 59, 0.32);
+  border-color: rgba(52, 211, 153, 0.3);
+}
+
+body[data-theme='dark'] .auth-reference-shell .text-emerald-700 {
+  color: #a7f3d0 !important;
+}
+
+body[data-theme='dark'] .auth-reference-shell .text-violet-600 {
+  color: #c4b5fd !important;
+}
+
+body[data-theme='dark'] .auth-reference-shell .hover\:text-violet-500:hover {
+  color: #ddd6fe !important;
+}
+
+@media (max-width: 640px) {
+  .auth-reference-inner {
+    padding-top: 5rem;
+  }
 }
 
 @media (max-width: 1023px) {

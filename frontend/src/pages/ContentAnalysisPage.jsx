@@ -13,18 +13,15 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
-
-const defaultGuidelines = {
-  user_id: 'demo-user',
-  brand_name: 'BRANDITHM',
-  brand_description: 'AI-powered brand governance and intelligence platform.',
-  preferred_tone: 'Confident, clear, modern, professional, and trustworthy.',
-  target_audience: 'Marketing professionals, brand teams, and enterprise stakeholders.',
-  preferred_keywords: ['brand', 'trust', 'clarity', 'innovation', 'governance'],
-  restricted_words: ['guaranteed', 'instant', 'best ever', 'hype'],
-  writing_style: 'Short, persuasive, and benefit-driven with structured messaging.',
-  brand_communication_rules: 'Avoid exaggerated claims, hype, and vague language. Keep the message precise, credible, and aligned with brand standards.',
-}
+import {
+  defaultGuidelines,
+  getCurrentUserId,
+  getLocalAnalyses,
+  loadBrandGuidelines,
+  normalizeGuidelines,
+  saveBrandGuidelines,
+  saveLocalAnalysis,
+} from '../lib/brandData'
 
 const scoreCards = [
   { key: 'overall_score', label: 'Overall Score', icon: Gauge },
@@ -39,6 +36,27 @@ function formatScore(value) {
   return `${Math.round(Number(value))}%`
 }
 
+function getLocalHistory() {
+  return getLocalAnalyses().map((item) => ({
+    id: item.id,
+    title: item.title,
+    brand_name: item.brand_name,
+    summary: item.summary,
+    overall_score: item.overall_score,
+    compliance_score: item.compliance_score,
+    status: item.status,
+    review_status: item.review_status,
+    created_at: item.created_at,
+  }))
+}
+
+function mergeLocalHistory(serverHistory) {
+  const serverIds = new Set(serverHistory.map((item) => item.id))
+  const localHistory = getLocalHistory().filter((item) => !serverIds.has(item.id))
+  return [...serverHistory, ...localHistory]
+    .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+}
+
 export default function ContentAnalysisPage() {
   const navigate = useNavigate()
   const [guidelines, setGuidelines] = useState(defaultGuidelines)
@@ -47,9 +65,8 @@ export default function ContentAnalysisPage() {
   const [loading, setLoading] = useState(false)
   const [analysis, setAnalysis] = useState(null)
   const [error, setError] = useState('')
-  const [history, setHistory] = useState([])
-  const [historyLoading, setHistoryLoading] = useState(true)
-  const [historyError, setHistoryError] = useState('')
+  const [history, setHistory] = useState(getLocalHistory)
+  const [historyLoading, setHistoryLoading] = useState(false)
   const [activeReportId, setActiveReportId] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -57,19 +74,14 @@ export default function ContentAnalysisPage() {
 
   const fetchHistory = useCallback(async () => {
     setHistoryLoading(true)
-    setHistoryError('')
 
     try {
       const response = await axios.get('/api/content/history', {
-        params: { user_id: defaultGuidelines.user_id },
+        params: { user_id: getCurrentUserId() },
       })
-      setHistory(response.data.history || [])
-    } catch (requestError) {
-      setHistory([])
-      setHistoryError(
-        requestError?.response?.data?.detail ||
-          'Unable to load analysis history. Check the backend and database connection.'
-      )
+      setHistory(mergeLocalHistory(response.data.history || []))
+    } catch {
+      setHistory(getLocalHistory())
     } finally {
       setHistoryLoading(false)
     }
@@ -79,41 +91,23 @@ export default function ContentAnalysisPage() {
     let cancelled = false
 
     const fetchGuidelines = async () => {
-      try {
-        const response = await axios.get('/api/brand-guidelines', {
-          params: { user_id: defaultGuidelines.user_id },
-        })
-
-        if (!cancelled && response.data?.guidelines?.length) {
-          const latest = response.data.guidelines[0]
-          setGuidelines({
-            ...defaultGuidelines,
-            ...latest,
-            preferred_keywords: latest.preferred_keywords || defaultGuidelines.preferred_keywords,
-            restricted_words: latest.restricted_words || defaultGuidelines.restricted_words,
-          })
-        }
-      } catch (error) {
-        // Ignore backend availability issues. The page still supports local entry.
+      const { guidelines: savedGuidelines } = await loadBrandGuidelines()
+      if (!cancelled) {
+        setGuidelines(savedGuidelines)
       }
     }
 
     const fetchInitialHistory = async () => {
       try {
         const response = await axios.get('/api/content/history', {
-          params: { user_id: defaultGuidelines.user_id },
+          params: { user_id: getCurrentUserId() },
         })
         if (!cancelled) {
-          setHistory(response.data.history || [])
-          setHistoryError('')
+          setHistory(mergeLocalHistory(response.data.history || []))
         }
-      } catch (requestError) {
+      } catch {
         if (!cancelled) {
-          setHistory([])
-          setHistoryError(
-            requestError?.response?.data?.detail ||
-              'Unable to load analysis history. Check the backend and database connection.'
-          )
+          setHistory(getLocalHistory())
         }
       } finally {
         if (!cancelled) {
@@ -152,20 +146,7 @@ export default function ContentAnalysisPage() {
   }
 
   const handleSaveGuidelines = async () => {
-    try {
-      await axios.post('/api/brand-guidelines', {
-        ...guidelines,
-        preferred_keywords: Array.isArray(guidelines.preferred_keywords)
-          ? guidelines.preferred_keywords
-          : guidelines.preferred_keywords.split(',').map((item) => item.trim()).filter(Boolean),
-        restricted_words: Array.isArray(guidelines.restricted_words)
-          ? guidelines.restricted_words
-          : guidelines.restricted_words.split(',').map((item) => item.trim()).filter(Boolean),
-      })
-      setError('')
-    } catch (requestError) {
-      setError('Unable to save brand guidelines at the moment. The content analysis can still run with the current values.')
-    }
+    await saveBrandGuidelines(guidelines)
   }
 
   const handleSubmit = async (event) => {
@@ -182,15 +163,7 @@ export default function ContentAnalysisPage() {
     setActiveReportId(null)
 
     try {
-      const payload = {
-        ...guidelines,
-        preferred_keywords: Array.isArray(guidelines.preferred_keywords)
-          ? guidelines.preferred_keywords
-          : guidelines.preferred_keywords.split(',').map((item) => item.trim()).filter(Boolean),
-        restricted_words: Array.isArray(guidelines.restricted_words)
-          ? guidelines.restricted_words
-          : guidelines.restricted_words.split(',').map((item) => item.trim()).filter(Boolean),
-      }
+      const payload = normalizeGuidelines(guidelines)
 
       const formData = new FormData()
       formData.append('user_id', guidelines.user_id)
@@ -209,10 +182,23 @@ export default function ContentAnalysisPage() {
 
       setAnalysis(response.data.analysis)
       setActiveReportId(response.data.report_id || null)
+      const localEntry = saveLocalAnalysis({
+        reportId: response.data.report_id,
+        title: selectedFile ? selectedFile.name : 'Marketing copy review',
+        brandName: guidelines.brand_name,
+        content,
+        analysis: response.data.analysis,
+      })
+      setHistory((current) => [
+        {
+          ...localEntry,
+          title: localEntry.title,
+          review_status: localEntry.review_status,
+        },
+        ...current.filter((item) => item.id !== localEntry.id),
+      ])
       if (response.data.report_id) {
-        await fetchHistory()
-      } else if (response.data.storage_warning) {
-        setHistoryError(response.data.storage_warning)
+        void fetchHistory()
       }
       localStorage.setItem('brandithm-analysis-content', content)
     } catch (requestError) {
@@ -462,12 +448,6 @@ export default function ContentAnalysisPage() {
                       />
                     </div>
 
-                    {historyError && (
-                      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                        {historyError}
-                      </div>
-                    )}
-
                     {historyLoading ? (
                       <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-500">
                         Loading analysis history...
@@ -518,7 +498,7 @@ export default function ContentAnalysisPage() {
                 {analysis.warning && (
                   <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
                     <p className="font-semibold">
-                      {analysis.engine === 'gemini' ? 'Gemini analysis' : 'Local rules fallback'}
+                      {analysis.engine === 'gemini' ? 'BRANDITHM AI analysis' : 'Local rules fallback'}
                     </p>
                     <p className="mt-1">{analysis.warning}</p>
                   </div>

@@ -13,6 +13,7 @@ class Settings:
     PORT = int(os.getenv('PORT', '8000'))
     MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017')
     DB_NAME = os.getenv('DB_NAME', 'brandithm')
+    LOCAL_DB_PATH = os.getenv('LOCAL_DB_PATH', str(BASE_DIR / 'data' / 'brandithm.sqlite3'))
     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'dev-secret-key')
     GOOGLE_API_KEY = (os.getenv('GOOGLE_API_KEY') or os.getenv('GEMINI_API_KEY') or '').strip()
     GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-3.6-flash')

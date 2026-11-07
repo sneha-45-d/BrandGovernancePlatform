@@ -2,9 +2,11 @@ import asyncio
 import json
 import logging
 import re
+import sqlite3
 from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
+from typing import Literal
 from zipfile import BadZipFile
 
 import fitz
@@ -18,6 +20,7 @@ from pydantic import BaseModel, Field
 from pymongo.errors import PyMongoError
 
 from app.config import settings
+from app.database import local_store
 from app.database.mongo import get_db
 
 router = APIRouter()
@@ -36,6 +39,10 @@ class BrandGuidelinesInput(BaseModel):
     restricted_words: list[str] = Field(default_factory=list)
     writing_style: str = ''
     brand_communication_rules: str = ''
+
+
+class ReviewStatusInput(BaseModel):
+    status: Literal['needs_review', 'approved', 'revision_requested']
 
 
 def normalize_list(items):
@@ -246,6 +253,7 @@ def serialize_analysis_record(record: dict) -> dict | None:
         'overall_score': analysis.get('overall_score'),
         'compliance_score': analysis.get('brand_compliance_score'),
         'status': record.get('status') or 'completed',
+        'review_status': record.get('review_status') or 'needs_review',
         'created_at': created_at.isoformat() if hasattr(created_at, 'isoformat') else created_at,
         'brand_guidelines': record.get('guidelines') or {},
     }
@@ -307,7 +315,11 @@ Rules:
         response = await asyncio.to_thread(
             model.generate_content,
             prompt,
-            generation_config={'temperature': 0.2, 'response_mime_type': 'application/json'},
+            generation_config={
+                'temperature': 0.2,
+                'response_mime_type': 'application/json',
+                'max_output_tokens': 2048,
+            },
         )
         parsed = parse_ai_json_response(response.text)
 
@@ -376,7 +388,11 @@ Rules:
         response = await asyncio.to_thread(
             model.generate_content,
             prompt,
-            generation_config={'temperature': 0.25, 'response_mime_type': 'application/json'},
+            generation_config={
+                'temperature': 0.25,
+                'response_mime_type': 'application/json',
+                'max_output_tokens': 2048,
+            },
         )
         parsed = parse_ai_json_response(response.text)
 
@@ -408,19 +424,37 @@ def save_brand_guidelines(payload: BrandGuidelinesInput):
             'message': 'Brand guidelines saved successfully.',
             'brand_name': payload.brand_name,
             'user_id': payload.user_id,
+            'storage': 'mongodb',
         }
-    except PyMongoError as exc:
-        logger.exception('Unable to save brand guidelines')
-        raise HTTPException(status_code=503, detail='Brand guidelines could not be saved. Check the database connection.') from exc
+    except PyMongoError:
+        logger.warning('MongoDB unavailable; saving brand guidelines to local server storage')
+        try:
+            local_store.save_guidelines(payload.model_dump())
+            return {
+                'message': 'Brand guidelines saved to local server storage.',
+                'brand_name': payload.brand_name,
+                'user_id': payload.user_id,
+                'storage': 'server-local',
+            }
+        except sqlite3.Error as exc:
+            logger.exception('Unable to save brand guidelines to local server storage')
+            raise HTTPException(status_code=503, detail='Brand guidelines could not be saved to local server storage.') from exc
 
 
 @router.get('/brand-guidelines')
 def get_brand_guidelines(user_id: str):
     try:
         items = list(guidelines_collection.find({'user_id': user_id}).sort('updated_at', -1).limit(10))
-    except PyMongoError as exc:
-        logger.exception('Unable to load brand guidelines')
-        raise HTTPException(status_code=503, detail='Brand guidelines are temporarily unavailable.') from exc
+    except PyMongoError:
+        logger.warning('MongoDB unavailable; loading brand guidelines from local server storage')
+        try:
+            return {
+                'guidelines': local_store.get_guidelines(user_id),
+                'storage': 'server-local',
+            }
+        except sqlite3.Error as exc:
+            logger.exception('Unable to load brand guidelines from local server storage')
+            raise HTTPException(status_code=503, detail='Brand guidelines are unavailable from both configured storage systems.') from exc
 
     formatted = []
     for item in items:
@@ -428,7 +462,7 @@ def get_brand_guidelines(user_id: str):
         item.pop('created_at', None)
         item.pop('updated_at', None)
         formatted.append(item)
-    return {'guidelines': formatted}
+    return {'guidelines': formatted, 'storage': 'mongodb'}
 
 
 @router.get('/content/history')
@@ -438,10 +472,49 @@ def get_content_history(user_id: str = Query(...), status: str | None = None, se
         query['status'] = status
 
     try:
-        items = list(content_collection.find(query).sort('created_at', -1).limit(50))
-    except PyMongoError as exc:
-        logger.exception('Unable to load content analysis history')
-        raise HTTPException(status_code=503, detail='Analysis history is temporarily unavailable.') from exc
+        local_items = local_store.list_analyses(user_id, status=status, search=search, limit=50)
+    except sqlite3.Error as exc:
+        logger.exception('Unable to load analysis history from local server storage')
+        raise HTTPException(status_code=503, detail='Analysis history is unavailable from local server storage.') from exc
+    try:
+        items = list(
+            content_collection.find(
+                query,
+                {
+                    'user_id': 1,
+                    'brand_name': 1,
+                    'content_title': 1,
+                    'title': 1,
+                    'analysis.summary': 1,
+                    'analysis.overall_score': 1,
+                    'analysis.brand_compliance_score': 1,
+                    'status': 1,
+                    'review_status': 1,
+                    'created_at': 1,
+                },
+            )
+            .sort('created_at', -1)
+            .limit(50)
+        )
+    except PyMongoError:
+        logger.warning('MongoDB unavailable; loading analysis history from local server storage')
+        return {
+            'history': [
+                {
+                    'id': f"serverlocal-{item['id']}",
+                    'brand_name': item.get('brand_name') or 'BRANDITHM',
+                    'title': item.get('content_title') or 'Untitled analysis',
+                    'summary': (item.get('analysis') or {}).get('summary') or '',
+                    'overall_score': (item.get('analysis') or {}).get('overall_score'),
+                    'compliance_score': (item.get('analysis') or {}).get('brand_compliance_score'),
+                    'status': item.get('status') or 'completed',
+                    'review_status': item.get('review_status') or 'needs_review',
+                    'created_at': item.get('created_at'),
+                }
+                for item in local_items
+            ],
+            'storage': 'server-local',
+        }
 
     filtered = []
     search_term = (search or '').strip().lower()
@@ -460,14 +533,43 @@ def get_content_history(user_id: str = Query(...), status: str | None = None, se
             'overall_score': (item.get('analysis') or {}).get('overall_score'),
             'compliance_score': (item.get('analysis') or {}).get('brand_compliance_score'),
             'status': item.get('status') or 'completed',
+            'review_status': item.get('review_status') or 'needs_review',
             'created_at': item.get('created_at'),
         })
 
-    return {'history': filtered}
+    existing_ids = {item['id'] for item in filtered}
+    for item in local_items:
+        local_id = f"serverlocal-{item['id']}"
+        if local_id in existing_ids:
+            continue
+        filtered.append({
+            'id': local_id,
+            'brand_name': item.get('brand_name') or 'BRANDITHM',
+            'title': item.get('content_title') or 'Untitled analysis',
+            'summary': (item.get('analysis') or {}).get('summary') or '',
+            'overall_score': (item.get('analysis') or {}).get('overall_score'),
+            'compliance_score': (item.get('analysis') or {}).get('brand_compliance_score'),
+            'status': item.get('status') or 'completed',
+            'review_status': item.get('review_status') or 'needs_review',
+            'created_at': item.get('created_at'),
+        })
+    filtered.sort(key=lambda item: str(item.get('created_at') or ''), reverse=True)
+    return {'history': filtered[:50], 'storage': 'mongodb' if not local_items else 'mixed'}
 
 
 @router.get('/content/{analysis_id}')
 def get_content_report(analysis_id: str, user_id: str | None = Query(None)):
+    if analysis_id.startswith('serverlocal-'):
+        try:
+            record = local_store.get_analysis(analysis_id.removeprefix('serverlocal-'), user_id)
+        except sqlite3.Error as exc:
+            logger.exception('Unable to load analysis report from local server storage')
+            raise HTTPException(status_code=503, detail='The local analysis report is temporarily unavailable.') from exc
+        if not record:
+            raise HTTPException(status_code=404, detail='Analysis report not found.')
+        record['_id'] = analysis_id
+        return serialize_analysis_record(record)
+
     if not ObjectId.is_valid(analysis_id):
         raise HTTPException(status_code=400, detail='Invalid analysis report id.')
 
@@ -483,6 +585,16 @@ def get_content_report(analysis_id: str, user_id: str | None = Query(None)):
 
 @router.delete('/content/{analysis_id}')
 def delete_content_report(analysis_id: str, user_id: str = Query(...)):
+    if analysis_id.startswith('serverlocal-'):
+        try:
+            deleted = local_store.delete_analysis(analysis_id.removeprefix('serverlocal-'), user_id)
+        except sqlite3.Error as exc:
+            logger.exception('Unable to delete local analysis report')
+            raise HTTPException(status_code=503, detail='The local analysis report could not be deleted.') from exc
+        if not deleted:
+            raise HTTPException(status_code=404, detail='Analysis report not found.')
+        return {'message': 'Analysis report deleted successfully.', 'deleted_id': analysis_id}
+
     if not ObjectId.is_valid(analysis_id):
         raise HTTPException(status_code=400, detail='Invalid analysis report id.')
 
@@ -494,6 +606,47 @@ def delete_content_report(analysis_id: str, user_id: str = Query(...)):
     except PyMongoError as exc:
         logger.exception('Unable to delete content analysis report')
         raise HTTPException(status_code=503, detail='The analysis report could not be deleted. Try again later.') from exc
+
+
+@router.patch('/content/{analysis_id}/review-status')
+def update_review_status(
+    analysis_id: str,
+    payload: ReviewStatusInput,
+    user_id: str = Query(...),
+):
+    if analysis_id.startswith('serverlocal-'):
+        try:
+            updated = local_store.update_analysis_review_status(
+                analysis_id.removeprefix('serverlocal-'),
+                user_id,
+                payload.status,
+            )
+        except sqlite3.Error as exc:
+            logger.exception('Unable to update local content review status')
+            raise HTTPException(status_code=503, detail='The local review status could not be saved.') from exc
+        if not updated:
+            raise HTTPException(status_code=404, detail='Analysis report not found.')
+        return {'id': analysis_id, 'review_status': payload.status, 'storage': 'server-local'}
+
+    if not ObjectId.is_valid(analysis_id):
+        raise HTTPException(status_code=400, detail='Invalid analysis report id.')
+
+    try:
+        updated = content_collection.update_one(
+            {'_id': ObjectId(analysis_id), 'user_id': user_id},
+            {
+                '$set': {
+                    'review_status': payload.status,
+                    'review_updated_at': datetime.now(timezone.utc),
+                }
+            },
+        )
+        if updated.matched_count == 0:
+            raise HTTPException(status_code=404, detail='Analysis report not found.')
+        return {'id': analysis_id, 'review_status': payload.status}
+    except PyMongoError as exc:
+        logger.exception('Unable to update content review status')
+        raise HTTPException(status_code=503, detail='The review status could not be saved to the database.') from exc
 
 
 @router.post('/content/analyze')
@@ -542,16 +695,24 @@ async def analyze_content(
         'guidelines': guideline_payload,
         'analysis': analysis,
         'status': 'completed',
+        'review_status': 'needs_review',
         'created_at': datetime.now(timezone.utc),
     }
 
     storage_warning = None
+    storage = 'mongodb'
     try:
         insert_result = content_collection.insert_one(record)
         record['_id'] = insert_result.inserted_id
-    except PyMongoError as exc:
-        logger.exception('Unable to persist content analysis report')
-        storage_warning = 'The analysis completed, but could not be saved to history because the database is unavailable.'
+    except PyMongoError:
+        logger.warning('MongoDB unavailable; saving analysis report to local server storage')
+        try:
+            local_id = local_store.save_analysis(record)
+            record['_id'] = f'serverlocal-{local_id}'
+            storage = 'server-local'
+        except sqlite3.Error as exc:
+            logger.exception('Unable to persist analysis report to local server storage')
+            storage_warning = 'The analysis completed, but could not be saved to server history.'
 
     response = {
         'message': 'Content analyzed successfully.',
@@ -559,6 +720,7 @@ async def analyze_content(
         'analysis': analysis,
         'report_id': str(record.get('_id')) if record.get('_id') else None,
         'file_name': file.filename if file else None,
+        'storage': storage if record.get('_id') else 'none',
     }
 
     if storage_warning:

@@ -11,18 +11,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import Sidebar from '../components/Sidebar'
-
-const defaultGuidelines = {
-  user_id: 'demo-user',
-  brand_name: 'BRANDITHM',
-  brand_description: 'AI-powered brand governance and intelligence platform.',
-  preferred_tone: 'Confident, clear, modern, professional, and trustworthy.',
-  target_audience: 'Marketing professionals, brand teams, and enterprise stakeholders.',
-  preferred_keywords: ['brand', 'trust', 'clarity', 'innovation', 'governance'],
-  restricted_words: ['guaranteed', 'instant', 'best ever', 'hype'],
-  writing_style: 'Short, persuasive, and benefit-driven with structured messaging.',
-  brand_communication_rules: 'Avoid exaggerated claims, hype, and vague language. Keep the message precise, credible, and aligned with brand standards.',
-}
+import { defaultGuidelines, loadBrandGuidelines, normalizeGuidelines } from '../lib/brandData'
 
 export default function AICorrectionPage() {
   const [guidelines, setGuidelines] = useState(defaultGuidelines)
@@ -33,27 +22,12 @@ export default function AICorrectionPage() {
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
-    const fetchGuidelines = async () => {
-      try {
-        const response = await axios.get('/api/brand-guidelines', {
-          params: { user_id: defaultGuidelines.user_id },
-        })
-
-        if (response.data?.guidelines?.length) {
-          const latest = response.data.guidelines[0]
-          setGuidelines({
-            ...defaultGuidelines,
-            ...latest,
-            preferred_keywords: latest.preferred_keywords || defaultGuidelines.preferred_keywords,
-            restricted_words: latest.restricted_words || defaultGuidelines.restricted_words,
-          })
-        }
-      } catch (requestError) {
-        // Keep the default guideline set for local content improvement.
-      }
-    }
-
-    fetchGuidelines()
+    let active = true
+    loadBrandGuidelines().then(({ guidelines: savedGuidelines }) => {
+      if (!active) return
+      setGuidelines(savedGuidelines)
+    })
+    return () => { active = false }
   }, [])
 
   const handleSubmit = async (event) => {
@@ -69,15 +43,7 @@ export default function AICorrectionPage() {
     setResult(null)
 
     try {
-      const payload = {
-        ...guidelines,
-        preferred_keywords: Array.isArray(guidelines.preferred_keywords)
-          ? guidelines.preferred_keywords
-          : guidelines.preferred_keywords.split(',').map((item) => item.trim()).filter(Boolean),
-        restricted_words: Array.isArray(guidelines.restricted_words)
-          ? guidelines.restricted_words
-          : guidelines.restricted_words.split(',').map((item) => item.trim()).filter(Boolean),
-      }
+      const payload = normalizeGuidelines(guidelines)
 
       const formData = new FormData()
       formData.append('user_id', guidelines.user_id)
@@ -233,7 +199,7 @@ export default function AICorrectionPage() {
                     <div className="mt-5 space-y-3">
                       <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
                         <p className="font-semibold">
-                          {result.engine === 'gemini' ? 'Gemini AI result' : 'Local rules fallback'}
+                          {result.engine === 'gemini' ? 'BRANDITHM AI result' : 'Local rules fallback'}
                         </p>
                         <p className="mt-1">{result.summary}</p>
                       </div>

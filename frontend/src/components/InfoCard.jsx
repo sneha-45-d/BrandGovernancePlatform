@@ -7,7 +7,6 @@ export default function InfoCard({ icon: Icon, title, description, value, classN
         <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-100 to-violet-100 text-indigo-600 shadow-inner">
           <Icon className="h-5 w-5" />
         </div>
-        <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Live</span>
       </div>
       <p className="text-sm font-medium text-slate-500">{title}</p>
       <p className="mt-2 text-3xl font-bold tracking-tight text-slate-950">{value}</p>
