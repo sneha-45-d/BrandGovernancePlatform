@@ -20,3 +20,4 @@ services:
         value: gemini-3.6-flash
       - key: ALLOWED_ORIGINS
         value: https://*.vercel.app,http://localhost:5173
+
