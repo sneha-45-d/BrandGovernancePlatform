@@ -1,13 +1,15 @@
 services:
   backend:
     build:
-      context: ./backend
+      context: .
+      dockerfile: backend/Dockerfile
     env_file:
       - ./backend/.env
     ports:
       - "8000:8000"
     volumes:
       - chroma_data:/app/app/data/chroma
+      - local_store_data:/app/data
     healthcheck:
       test:
         - CMD
@@ -37,3 +39,4 @@ services:
 
 volumes:
   chroma_data:
+  local_store_data:

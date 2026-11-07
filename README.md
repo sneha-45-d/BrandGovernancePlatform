@@ -63,11 +63,11 @@ In a second terminal:
 
 ```powershell
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173). The root route redirects to sign in; create an account at `/signup`. Vite forwards `/api` requests to `http://localhost:8000`.
+Open [http://localhost:5173](http://localhost:5173) for the public landing page. Sign in at `/signin` or create an account at `/signup`. Vite forwards `/api` requests to `http://localhost:8000`.
 
 ### macOS/Linux shell
 
@@ -86,7 +86,7 @@ In another terminal:
 
 ```bash
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
@@ -119,9 +119,9 @@ The rule-based AI fallback can still perform basic checks, but it is not equival
 
 ## Deploy the backend to Railway
 
-The root `railway.json` points Railway at `backend/Dockerfile` and configures `/api/health` as the service health check. The container listens on Railway's injected `PORT` value.
+The root `railway.json` points Railway at `backend/Dockerfile` and configures `/api/health` as the service health check. The Dockerfile builds from the repository root, listens on Railway's injected `PORT`, and stores local fallback data at `/app/data`.
 
-1. Create a Railway project from this GitHub repository and deploy the backend service from the repository root.
+1. Create a Railway project from this GitHub repository. Use the repository root as the build context and keep the configured Dockerfile path as `backend/Dockerfile`.
 2. Add the backend variables in Railway's service settings: `MONGO_URI`, `DB_NAME`, `JWT_SECRET_KEY`, `ALLOWED_ORIGINS`, and optionally `GOOGLE_API_KEY`, `GEMINI_MODEL`, and `LOCAL_DB_PATH`. Use the generated Netlify site origin in `ALLOWED_ORIGINS`.
 3. If relying on SQLite fallback, attach a persistent Railway volume and set `LOCAL_DB_PATH` to a path on that volume; otherwise fallback data may be lost when the service is replaced.
 4. Generate a Railway public domain and verify `https://<your-api-domain>/api/health` returns a successful response.
@@ -137,7 +137,7 @@ Netlify hosts the **frontend only**. It does not run this repository's FastAPI b
 3. Set the Railway backend's `ALLOWED_ORIGINS` to include your exact Netlify site origin.
 4. If the Netlify site has site-wide access control/password protection enabled, disable it to allow public access.
 
-The public URL `https://brandithm.netlify.app` currently responds with HTTP 401 Unauthorized, which indicates Netlify access control is blocking the request. The API URL and deployment logs are not available in this repository, so the backend deployment state cannot be confirmed here.
+If the Netlify site has access control enabled, disable it to make the landing page publicly accessible. Netlify and Railway credentials/domains are configured in their respective dashboards and should not be committed to this repository.
 
 ## Run with Docker
 
@@ -150,7 +150,7 @@ docker compose up --build
 
 Open the frontend at [http://localhost:8080](http://localhost:8080). The API is at [http://localhost:8000](http://localhost:8000), with health status at `/api/health` and interactive API documentation at `/docs`.
 
-Docker Compose persists Chroma data in the `chroma_data` named volume. The SQLite fallback database is **not** mounted by the provided Compose file, so add a persistent mount for `/app/data` (or set `LOCAL_DB_PATH` to a mounted location) if you need that data to survive container replacement. Stop the services with `docker compose down`; use `docker compose down --volumes` only if you intend to delete the Chroma volume as well.
+Docker Compose persists Chroma data in the `chroma_data` named volume and the SQLite fallback database in the `local_store_data` volume. Stop the services with `docker compose down`; use `docker compose down --volumes` only if you also intend to delete those volumes.
 
 ## Application routes
 
