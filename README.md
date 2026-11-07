@@ -117,19 +117,27 @@ The SQLite fallback belongs to the backend server and is not shared between mult
 
 The rule-based AI fallback can still perform basic checks, but it is not equivalent to Gemini analysis or a full AI rewrite. Configure a valid Google API key to enable Gemini features.
 
-## Deploy to Netlify
+## Deploy the backend to Railway
+
+The root `railway.json` points Railway at `backend/Dockerfile` and configures `/api/health` as the service health check. The container listens on Railway's injected `PORT` value.
+
+1. Create a Railway project from this GitHub repository and deploy the backend service from the repository root.
+2. Add the backend variables in Railway's service settings: `MONGO_URI`, `DB_NAME`, `JWT_SECRET_KEY`, `ALLOWED_ORIGINS`, and optionally `GOOGLE_API_KEY`, `GEMINI_MODEL`, and `LOCAL_DB_PATH`. Use the generated Netlify site origin in `ALLOWED_ORIGINS`.
+3. If relying on SQLite fallback, attach a persistent Railway volume and set `LOCAL_DB_PATH` to a path on that volume; otherwise fallback data may be lost when the service is replaced.
+4. Generate a Railway public domain and verify `https://<your-api-domain>/api/health` returns a successful response.
+
+## Deploy the frontend to Netlify
 
 The repository includes a `netlify.toml` configured to build the Vite frontend from `frontend/`, publish `frontend/dist`, use Node.js 22, and rewrite client-side routes to `index.html`. This lets both `/` and direct links such as `/signin` load correctly on Netlify.
 
 Netlify hosts the **frontend only**. It does not run this repository's FastAPI backend. To use sign-in, analysis, guidelines, and review APIs on a deployed site:
 
-1. Deploy the `backend/` service separately to a host that supports Python/FastAPI or Docker.
-2. Configure the backend's MongoDB, AI, and persistence environment variables on that host. Keep all secrets there, not in frontend variables.
-3. Set `ALLOWED_ORIGINS` on the backend to include your exact Netlify site origin (for example `https://your-site.netlify.app`).
-4. In Netlify, set the build environment variable `VITE_API_BASE_URL` to the backend's HTTPS origin (for example `https://your-api.example.com`), without a trailing `/api`, then trigger a new deploy. Vite compiles this value into the frontend build.
-5. Confirm the backend health endpoint is reachable at `https://your-api.example.com/api/health`.
+1. Import the GitHub repository into Netlify; the checked-in `netlify.toml` provides the build and SPA route configuration.
+2. Set the build environment variable `VITE_API_BASE_URL` to your Railway backend's HTTPS origin (for example `https://your-api.example.com`), without a trailing `/api`, then trigger a new deploy. Vite compiles this value into the frontend build.
+3. Set the Railway backend's `ALLOWED_ORIGINS` to include your exact Netlify site origin.
+4. If the Netlify site has site-wide access control/password protection enabled, disable it to allow public access.
 
-If the backend URL is missing or unreachable, the static landing page can still load, but application API requests will not reach FastAPI. No Netlify deployment log or deployed-site URL was included with this change, so the exact failure from a specific deployment cannot be confirmed here; this configuration addresses the missing frontend build/routing setup and makes the backend connection explicit.
+The public URL `https://brandithm.netlify.app` currently responds with HTTP 401 Unauthorized, which indicates Netlify access control is blocking the request. The API URL and deployment logs are not available in this repository, so the backend deployment state cannot be confirmed here.
 
 ## Run with Docker
 
