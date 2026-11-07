@@ -482,3 +482,89 @@ body[data-theme='dark'] .rounded-2xl,
 body[data-theme='dark'] .rounded-3xl {
   border-color: rgba(148, 163, 184, 0.18);
 }
+
+body[data-theme='dark'] .landing-shell {
+  background:
+    radial-gradient(circle at 8% 12%, rgba(91, 33, 182, 0.2), transparent 28%),
+    radial-gradient(circle at 88% 28%, rgba(14, 116, 144, 0.14), transparent 30%),
+    linear-gradient(180deg, #080d1c 0%, #0b1222 52%, #0f172a 100%);
+  color: #e2e8f0;
+}
+
+body[data-theme='dark'] .landing-shell::before {
+  opacity: 0.45;
+}
+
+body[data-theme='dark'] .landing-shell > .landing-content > header nav {
+  border-color: rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.86);
+  box-shadow: 0 18px 45px rgba(2, 6, 23, 0.28);
+}
+
+body[data-theme='dark'] .landing-shell .text-slate-950,
+body[data-theme='dark'] .landing-shell .text-slate-900 {
+  color: #f8fafc !important;
+}
+
+body[data-theme='dark'] .landing-shell .text-slate-800,
+body[data-theme='dark'] .landing-shell .text-slate-700 {
+  color: #cbd5e1 !important;
+}
+
+body[data-theme='dark'] .landing-shell .text-slate-600,
+body[data-theme='dark'] .landing-shell .text-slate-500,
+body[data-theme='dark'] .landing-shell .text-slate-400 {
+  color: #94a3b8 !important;
+  opacity: 1;
+}
+
+body[data-theme='dark'] .landing-shell #platform {
+  border-color: rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.64);
+  box-shadow: 0 24px 70px rgba(2, 6, 23, 0.24);
+}
+
+body[data-theme='dark'] .landing-shell .landing-capability-card,
+body[data-theme='dark'] .landing-shell .landing-step-card {
+  border-color: rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.78);
+  box-shadow: 0 14px 36px rgba(2, 6, 23, 0.22);
+}
+
+body[data-theme='dark'] .landing-shell .landing-capability-card:hover,
+body[data-theme='dark'] .landing-shell .landing-step-card:hover {
+  border-color: rgba(167, 139, 250, 0.38);
+  box-shadow: 0 20px 46px rgba(2, 6, 23, 0.4);
+}
+
+body[data-theme='dark'] .landing-shell .bg-white\/70,
+body[data-theme='dark'] .landing-shell .bg-white\/65,
+body[data-theme='dark'] .landing-shell .bg-white\/60,
+body[data-theme='dark'] .landing-shell .bg-white\/55,
+body[data-theme='dark'] .landing-shell .bg-white\/50 {
+  border-color: rgba(148, 163, 184, 0.2);
+  background-color: rgba(15, 23, 42, 0.72);
+}
+
+body[data-theme='dark'] .landing-shell .hover\:bg-white:hover {
+  background-color: #1e293b;
+}
+
+body[data-theme='dark'] .landing-shell .landing-icon-violet {
+  background: rgba(139, 92, 246, 0.2);
+  color: #c4b5fd;
+}
+
+body[data-theme='dark'] .landing-shell .landing-icon-blue {
+  background: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+}
+
+body[data-theme='dark'] .landing-shell .landing-icon-teal {
+  background: rgba(20, 184, 166, 0.2);
+  color: #99f6e4;
+}
+
+body[data-theme='dark'] .landing-shell footer .brand-mark + span {
+  color: #f8fafc !important;
+}
