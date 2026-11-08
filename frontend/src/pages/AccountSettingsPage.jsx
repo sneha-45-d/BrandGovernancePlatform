@@ -3,6 +3,7 @@ import { AlertCircle, CheckCircle2, LogOut, Save, UserRound } from 'lucide-react
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
+import { getApiErrorMessage } from '../lib/apiError'
 import { useAuth } from '../lib/auth-context'
 import { updateLocalAccount } from '../lib/localAuth'
 
@@ -38,7 +39,7 @@ export default function AccountSettingsPage() {
     } catch (error) {
       setNotice({
         type: 'error',
-        text: error.response?.data?.detail || 'Could not save your account settings. Please try again.',
+        text: getApiErrorMessage(error, 'Could not save your account settings. Please try again.'),
       })
     } finally {
       setSaving(false)
@@ -52,7 +53,7 @@ export default function AccountSettingsPage() {
     } catch (error) {
       setNotice({
         type: 'error',
-        text: error.response?.data?.detail || 'Signed out on this device, but the server session could not be ended.',
+        text: getApiErrorMessage(error, 'Signed out on this device, but the server session could not be ended.'),
       })
     } finally {
       navigate('/signin', { replace: true })
@@ -65,7 +66,7 @@ export default function AccountSettingsPage() {
       <div className="mx-auto max-w-7xl px-4 py-6 lg:px-6">
         <header className="surface-panel mb-6 rounded-[2rem] p-6">
           <div className="flex items-center gap-3">
-            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-700">
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
               <UserRound className="h-5 w-5" />
             </span>
             <div>
@@ -109,7 +110,7 @@ export default function AccountSettingsPage() {
                     required
                     maxLength={120}
                     autoComplete="name"
-                    className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-normal outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                    className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-normal outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
                   />
                 </label>
                 <label className="text-sm font-semibold text-slate-700">
@@ -120,7 +121,7 @@ export default function AccountSettingsPage() {
                     onChange={(event) => setEmail(event.target.value)}
                     required
                     autoComplete="email"
-                    className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-normal outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                    className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-normal outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
                   />
                 </label>
               </div>
@@ -138,7 +139,7 @@ export default function AccountSettingsPage() {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60"
+                  className="inline-flex items-center gap-2 rounded-full bg-emerald-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-green-900 disabled:opacity-60"
                 >
                   <Save className="h-4 w-4" />
                   {saving ? 'Saving…' : 'Save settings'}
@@ -149,7 +150,7 @@ export default function AccountSettingsPage() {
             <section className="surface-panel rounded-[2rem] p-6">
               <h2 className="font-semibold text-slate-900">Signed-in account</h2>
               <div className="mt-4 flex items-center gap-3">
-                <span className="flex h-11 w-11 items-center justify-center rounded-full bg-indigo-100 font-bold text-indigo-700">
+                <span className="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-100 font-bold text-emerald-700">
                   {(user?.full_name || user?.email || 'B').charAt(0).toUpperCase()}
                 </span>
                 <div className="min-w-0">

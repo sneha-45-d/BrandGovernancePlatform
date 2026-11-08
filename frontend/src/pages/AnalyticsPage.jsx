@@ -31,7 +31,7 @@ import {
 import InfoCard from '../components/InfoCard'
 import Sidebar from '../components/Sidebar'
 
-const chartPalette = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6']
+const chartPalette = ['#08734f', '#10b981', '#10b981', '#f59e0b', '#ef4444', '#34d399']
 
 const analyticsData = {
   '7': {
@@ -249,7 +249,7 @@ function AnalyticsPage() {
       <div className="mx-auto max-w-7xl px-4 py-6 lg:px-6">
         <div className="surface-panel mb-6 flex flex-col gap-5 rounded-[2rem] p-4 shadow-sm backdrop-blur-sm lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-lg shadow-indigo-500/20">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-green-500 text-white shadow-lg shadow-emerald-500/20">
               <TrendingUp className="h-5 w-5" />
             </div>
             <div>
@@ -273,7 +273,7 @@ function AnalyticsPage() {
                 {option.label}
               </button>
             ))}
-            <button type="button" className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-indigo-200 hover:text-indigo-700">
+            <button type="button" className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-emerald-200 hover:text-emerald-700">
               <Download className="h-4 w-4" />
               Export
             </button>
@@ -332,15 +332,15 @@ function AnalyticsPage() {
                     <AreaChart data={selectedData.scoreSeries}>
                       <defs>
                         <linearGradient id="scoreFill" x1="0" x2="0" y1="0" y2="1">
-                          <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.4} />
-                          <stop offset="95%" stopColor="#4f46e5" stopOpacity={0.05} />
+                          <stop offset="5%" stopColor="#08734f" stopOpacity={0.4} />
+                          <stop offset="95%" stopColor="#08734f" stopOpacity={0.05} />
                         </linearGradient>
                       </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis dataKey="label" stroke="#64748b" />
-                      <YAxis stroke="#64748b" domain={[80, 100]} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
+                      <XAxis dataKey="label" stroke="var(--chart-label)" />
+                      <YAxis stroke="var(--chart-label)" domain={[80, 100]} />
                       <Tooltip />
-                      <Area type="monotone" dataKey="score" stroke="#4f46e5" fill="url(#scoreFill)" strokeWidth={3} />
+                      <Area type="monotone" dataKey="score" stroke="#08734f" fill="url(#scoreFill)" strokeWidth={3} />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
@@ -354,11 +354,11 @@ function AnalyticsPage() {
                 <div className="h-72">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={selectedData.approvalSeries}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis dataKey="name" stroke="#64748b" />
-                      <YAxis stroke="#64748b" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
+                      <XAxis dataKey="name" stroke="var(--chart-label)" />
+                      <YAxis stroke="var(--chart-label)" />
                       <Tooltip />
-                      <Bar dataKey="value" radius={[10, 10, 0, 0]} fill="#0ea5e9" />
+                      <Bar dataKey="value" radius={[10, 10, 0, 0]} fill="#10b981" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -394,12 +394,12 @@ function AnalyticsPage() {
                 <div className="h-80">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={selectedData.trendSeries}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis dataKey="label" stroke="#64748b" />
-                      <YAxis stroke="#64748b" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
+                      <XAxis dataKey="label" stroke="var(--chart-label)" />
+                      <YAxis stroke="var(--chart-label)" />
                       <Tooltip />
                       <Legend />
-                      <Line type="monotone" dataKey="weekly" stroke="#4f46e5" strokeWidth={3} dot={{ r: 4 }} />
+                      <Line type="monotone" dataKey="weekly" stroke="#08734f" strokeWidth={3} dot={{ r: 4 }} />
                       <Line type="monotone" dataKey="monthly" stroke="#10b981" strokeWidth={3} dot={{ r: 4 }} />
                     </LineChart>
                   </ResponsiveContainer>

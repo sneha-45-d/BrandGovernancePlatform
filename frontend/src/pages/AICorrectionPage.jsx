@@ -11,22 +11,32 @@ import {
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import Sidebar from '../components/Sidebar'
-import { defaultGuidelines, loadBrandGuidelines, normalizeGuidelines } from '../lib/brandData'
+import { getApiErrorMessage } from '../lib/apiError'
+import { defaultGuidelines, getUserStorageKey, loadBrandGuidelines, normalizeGuidelines } from '../lib/brandData'
 
 export default function AICorrectionPage() {
   const [guidelines, setGuidelines] = useState(defaultGuidelines)
-  const [content, setContent] = useState(() => localStorage.getItem('brandithm-correction-content') || '')
+  const [content, setContent] = useState(() => localStorage.getItem(getUserStorageKey('brandithm-correction-content')) || '')
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [guidelinesLoading, setGuidelinesLoading] = useState(true)
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     let active = true
-    loadBrandGuidelines().then(({ guidelines: savedGuidelines }) => {
-      if (!active) return
-      setGuidelines(savedGuidelines)
-    })
+    const fetchGuidelines = async () => {
+      try {
+        const { guidelines: savedGuidelines } = await loadBrandGuidelines()
+        if (active) setGuidelines(savedGuidelines)
+      } catch (requestError) {
+        if (active) setError(getApiErrorMessage(requestError, 'Unable to load saved brand rules.'))
+      } finally {
+        if (active) setGuidelinesLoading(false)
+      }
+    }
+
+    fetchGuidelines()
     return () => { active = false }
   }, [])
 
@@ -46,7 +56,7 @@ export default function AICorrectionPage() {
       const payload = normalizeGuidelines(guidelines)
 
       const formData = new FormData()
-      formData.append('user_id', guidelines.user_id)
+      formData.append('user_id', payload.user_id)
       formData.append('brand_name', guidelines.brand_name)
       formData.append('content', content)
       formData.append('guidelines', JSON.stringify(payload))
@@ -56,12 +66,12 @@ export default function AICorrectionPage() {
       })
 
       setResult(response.data)
-      localStorage.setItem('brandithm-correction-content', content)
+      localStorage.setItem(getUserStorageKey('brandithm-correction-content'), content)
     } catch (requestError) {
-      setError(
-        requestError?.response?.data?.detail ||
-          'Unable to generate corrected content. Check the backend configuration or Gemini quota.'
-      )
+      setError(getApiErrorMessage(
+        requestError,
+        'Unable to generate corrected content. Check the backend configuration or Gemini quota.'
+      ))
     } finally {
       setLoading(false)
     }
@@ -98,7 +108,7 @@ export default function AICorrectionPage() {
       <div className="mx-auto max-w-7xl px-4 py-6 lg:px-6">
         <div className="surface-panel mb-6 flex flex-col gap-4 rounded-[2rem] p-4 shadow-[0_18px_45px_rgba(15,23,42,0.06)] lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-100 to-violet-100 text-indigo-600 shadow-inner">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-100 to-green-100 text-emerald-600 shadow-inner">
               <Wand2 className="h-5 w-5" />
             </div>
             <div>
@@ -127,8 +137,9 @@ export default function AICorrectionPage() {
                     <input
                       type="text"
                       value={guidelines.brand_name}
+                      disabled={guidelinesLoading}
                       onChange={(event) => setGuidelines((current) => ({ ...current, brand_name: event.target.value }))}
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
                     />
                   </div>
 
@@ -139,7 +150,7 @@ export default function AICorrectionPage() {
                       onChange={(event) => setContent(event.target.value)}
                       rows={12}
                       placeholder="Paste the original ad, caption, email headline, or product description here..."
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
                     />
                   </div>
 
@@ -151,14 +162,16 @@ export default function AICorrectionPage() {
 
                   <button
                     type="submit"
-                    disabled={loading}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 via-violet-500 to-blue-500 px-4 py-3.5 text-sm font-semibold text-white shadow-[0_22px_35px_rgba(79,70,229,0.28)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-80"
+                    disabled={loading || guidelinesLoading}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-emerald-600 via-green-500 to-emerald-500 px-4 py-3.5 text-sm font-semibold text-white shadow-[0_22px_35px_rgba(16,120,78,0.28)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-80"
                   >
                     {loading ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
                         Correcting content...
                       </>
+                    ) : guidelinesLoading ? (
+                      'Loading brand rules...'
                     ) : (
                       <>
                         Correct Content
@@ -199,7 +212,7 @@ export default function AICorrectionPage() {
                     <div className="mt-5 space-y-3">
                       <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
                         <p className="font-semibold">
-                          {result.engine === 'gemini' ? 'BRANDITHM AI result' : 'Local rules fallback'}
+                          {result.engine === 'gemini' ? `${guidelines.brand_name} AI result` : 'Local rules fallback'}
                         </p>
                         <p className="mt-1">{result.summary}</p>
                       </div>
@@ -232,7 +245,7 @@ export default function AICorrectionPage() {
 
                   <div className="surface-panel rounded-[2rem] p-6 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
                     <div className="mb-4 flex items-center gap-3">
-                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-100 text-indigo-700">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
                         <Sparkles className="h-4 w-4" />
                       </span>
                       <div>
@@ -246,7 +259,7 @@ export default function AICorrectionPage() {
                       <button
                         type="button"
                         onClick={handleCopy}
-                        className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-indigo-200 hover:text-indigo-700"
+                        className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-emerald-200 hover:text-emerald-700"
                       >
                         <Copy className="h-4 w-4" />
                         {copied ? 'Copied' : 'Copy corrected content'}
@@ -254,7 +267,7 @@ export default function AICorrectionPage() {
                       <button
                         type="button"
                         onClick={handleDownload}
-                        className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+                        className="inline-flex items-center gap-2 rounded-full bg-emerald-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-green-900"
                       >
                         <Download className="h-4 w-4" />
                         Download
@@ -293,7 +306,7 @@ export default function AICorrectionPage() {
 
                   <div className="surface-panel rounded-[2rem] p-6 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
                     <div className="mb-4 flex items-center gap-3">
-                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-100 text-violet-700">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-100 text-green-700">
                         <Sparkles className="h-4 w-4" />
                       </span>
                       <div>

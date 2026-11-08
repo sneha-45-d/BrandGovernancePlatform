@@ -6,6 +6,10 @@ export const localAnalysesStorageKey = 'brandithm-local-analyses'
 
 export const reviewStatuses = ['needs_review', 'approved', 'revision_requested']
 
+export function getUserStorageKey(key, userId = getCurrentUserId()) {
+  return `${key}:${userId}`
+}
+
 export function getCurrentUserId() {
   try {
     const stored = localStorage.getItem('brandithm-auth-session') || sessionStorage.getItem('brandithm-auth-session')
@@ -29,7 +33,7 @@ export const defaultGuidelines = {
 
 function writeGuidelinesCache(guidelines, pendingSync) {
   localStorage.setItem(
-    guidelinesStorageKey,
+    getUserStorageKey(guidelinesStorageKey, guidelines.user_id),
     JSON.stringify({ guidelines, pendingSync })
   )
 }
@@ -51,22 +55,40 @@ export function normalizeGuidelines(guidelines) {
 }
 
 export async function loadBrandGuidelines() {
-  let localGuidelines = defaultGuidelines
+  const userId = getCurrentUserId()
+  const cacheKey = getUserStorageKey(guidelinesStorageKey, userId)
+  let localGuidelines = normalizeGuidelines(defaultGuidelines)
   let hasLocalGuidelines = false
   let pendingSync = false
+  let stored = null
+
   try {
-    const stored = JSON.parse(localStorage.getItem(guidelinesStorageKey) || 'null')
-    if (stored) {
-      hasLocalGuidelines = true
-      if (stored.guidelines) {
-        localGuidelines = normalizeGuidelines(stored.guidelines)
-        pendingSync = stored.pendingSync === true
-      } else {
-        localGuidelines = normalizeGuidelines(stored)
-      }
-    }
+    stored = JSON.parse(localStorage.getItem(cacheKey) || 'null')
   } catch {
-    localStorage.removeItem(guidelinesStorageKey)
+    localStorage.removeItem(cacheKey)
+  }
+
+  if (!stored) {
+    try {
+      const legacy = JSON.parse(localStorage.getItem(guidelinesStorageKey) || 'null')
+      const legacyGuidelines = legacy?.guidelines || legacy
+      if (legacyGuidelines?.user_id === userId) {
+        stored = legacy
+        localStorage.setItem(cacheKey, JSON.stringify(legacy))
+      }
+    } catch {
+      localStorage.removeItem(guidelinesStorageKey)
+    }
+  }
+
+  if (stored) {
+    hasLocalGuidelines = true
+    if (stored.guidelines) {
+      localGuidelines = normalizeGuidelines(stored.guidelines)
+      pendingSync = stored.pendingSync === true
+    } else {
+      localGuidelines = normalizeGuidelines(stored)
+    }
   }
 
   if (pendingSync) {
@@ -89,7 +111,7 @@ export async function loadBrandGuidelines() {
 
   try {
     const response = await axios.get('/api/brand-guidelines', {
-      params: { user_id: getCurrentUserId() },
+      params: { user_id: userId },
     })
     const savedGuidelines = response.data?.guidelines?.[0]
     if (savedGuidelines) {
@@ -148,8 +170,11 @@ export async function saveBrandGuidelines(guidelines) {
 
 export function getLocalAnalyses() {
   try {
-    const analyses = JSON.parse(localStorage.getItem(localAnalysesStorageKey) || '[]')
-    return Array.isArray(analyses) ? analyses : []
+    const userId = getCurrentUserId()
+    const analyses = JSON.parse(localStorage.getItem(getUserStorageKey(localAnalysesStorageKey, userId)) || '[]')
+    return Array.isArray(analyses)
+      ? analyses.filter((item) => item && (!item.user_id || item.user_id === userId))
+      : []
   } catch {
     return []
   }
@@ -160,6 +185,7 @@ export function saveLocalAnalysis({ reportId, title, brandName, content, analysi
   const id = reportId || `local-${Date.now()}`
   const nextAnalysis = {
     id,
+    user_id: getCurrentUserId(),
     title,
     brand_name: brandName,
     content,
@@ -172,7 +198,7 @@ export function saveLocalAnalysis({ reportId, title, brandName, content, analysi
     created_at: createdAt || new Date().toISOString(),
   }
   localStorage.setItem(
-    localAnalysesStorageKey,
+    getUserStorageKey(localAnalysesStorageKey, nextAnalysis.user_id),
     JSON.stringify([nextAnalysis, ...analyses.filter((item) => item.id !== id)].slice(0, 100))
   )
   return nextAnalysis
@@ -187,7 +213,10 @@ export function updateLocalAnalysisReviewStatus(id, reviewStatus) {
       : item
   ))
   if (exists) {
-    localStorage.setItem(localAnalysesStorageKey, JSON.stringify(updated))
+    localStorage.setItem(
+      getUserStorageKey(localAnalysesStorageKey),
+      JSON.stringify(updated)
+    )
   }
   return exists
 }

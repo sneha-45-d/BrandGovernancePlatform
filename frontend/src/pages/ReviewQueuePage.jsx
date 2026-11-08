@@ -12,9 +12,11 @@ import {
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
+import { getApiErrorMessage } from '../lib/apiError'
 import {
   getCurrentUserId,
   getLocalAnalyses,
+  getUserStorageKey,
   updateLocalAnalysisReviewStatus,
 } from '../lib/brandData'
 
@@ -27,7 +29,7 @@ const statusLabels = {
 function getStatusClass(status) {
   if (status === 'approved') return 'bg-emerald-100 text-emerald-800'
   if (status === 'revision_requested') return 'bg-amber-100 text-amber-800'
-  return 'bg-indigo-100 text-indigo-800'
+  return 'bg-emerald-100 text-emerald-800'
 }
 
 export default function ReviewQueuePage() {
@@ -100,8 +102,7 @@ export default function ReviewQueuePage() {
       } catch (error) {
         if (!hasLocalCopy) {
           setActionError(
-            error?.response?.data?.detail ||
-              'Could not save this review decision. Please try again.'
+            getApiErrorMessage(error, 'Could not save this review decision. Please try again.')
           )
           setActiveAction('')
           return
@@ -136,8 +137,7 @@ export default function ReviewQueuePage() {
       setDetails((current) => ({ ...current, [review.id]: response.data }))
     } catch (error) {
       setActionError(
-        error?.response?.data?.detail ||
-          'Could not load this review. Check the backend and database connection.'
+        getApiErrorMessage(error, 'Could not load this review. Check the backend and database connection.')
       )
       setExpandedId('')
     }
@@ -153,14 +153,13 @@ export default function ReviewQueuePage() {
         reviewDetails = response.data
       } catch (error) {
         setActionError(
-          error?.response?.data?.detail ||
-            'Could not load this review for correction. Check the backend and database connection.'
+          getApiErrorMessage(error, 'Could not load this review for correction. Check the backend and database connection.')
         )
         return
       }
     }
 
-    localStorage.setItem('brandithm-correction-content', reviewDetails.content)
+    localStorage.setItem(getUserStorageKey('brandithm-correction-content'), reviewDetails.content)
     navigate('/ai-correction')
   }
 
@@ -169,7 +168,7 @@ export default function ReviewQueuePage() {
       <div className="mx-auto max-w-7xl px-4 py-6 lg:px-6">
         <header className="surface-panel mb-6 rounded-[2rem] p-6">
           <div className="flex items-center gap-3">
-            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-700">
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
               <ClipboardCheck className="h-5 w-5" />
             </span>
             <div>
@@ -200,7 +199,7 @@ export default function ReviewQueuePage() {
                 <div key={label} className="surface-panel rounded-2xl p-5">
                   <div className="flex items-center justify-between">
                     <p className="text-sm text-slate-500">{label}</p>
-                    <Icon className="h-4 w-4 text-indigo-600" />
+                    <Icon className="h-4 w-4 text-emerald-600" />
                   </div>
                   <p className="mt-2 text-3xl font-bold text-slate-950">{count}</p>
                 </div>
@@ -232,8 +231,8 @@ export default function ReviewQueuePage() {
                       onClick={() => setStatusFilter(value)}
                       className={`rounded-full px-3 py-2 text-xs font-semibold transition ${
                         statusFilter === value
-                          ? 'bg-slate-950 text-white'
-                          : 'border border-slate-200 bg-white text-slate-600 hover:border-indigo-200 hover:text-indigo-700'
+                          ? 'bg-emerald-950 text-white'
+                          : 'border border-slate-200 bg-white text-slate-600 hover:border-emerald-200 hover:text-emerald-700'
                       }`}
                     >
                       {label}
@@ -278,7 +277,7 @@ export default function ReviewQueuePage() {
                             <button
                               type="button"
                               onClick={() => handleViewDetails(review)}
-                              className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:border-indigo-200 hover:text-indigo-700"
+                              className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:border-emerald-200 hover:text-emerald-700"
                             >
                               {expandedId === review.id ? 'Hide details' : 'View details'}
                               <ChevronDown className={`h-3.5 w-3.5 transition ${expandedId === review.id ? 'rotate-180' : ''}`} />
@@ -308,7 +307,7 @@ export default function ReviewQueuePage() {
                             <button
                               type="button"
                               onClick={() => handleSendToCorrection(review)}
-                              className="inline-flex items-center gap-1 rounded-full border border-indigo-200 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"
+                              className="inline-flex items-center gap-1 rounded-full border border-emerald-200 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
                             >
                               Correct copy <ArrowRight className="h-3.5 w-3.5" />
                             </button>
