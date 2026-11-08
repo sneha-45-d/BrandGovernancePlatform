@@ -267,9 +267,9 @@ async def run_ai_brand_analysis(content: str, brand_name: str, guidelines: dict)
     try:
         genai.configure(api_key=api_key)
 
-        model_name = (settings.GEMINI_MODEL or 'gemini-1.5-flash').strip()
+        model_name = (settings.GEMINI_MODEL or 'gemini-3.5-flash').strip()
         if not model_name:
-            model_name = 'gemini-1.5-flash'
+            model_name = 'gemini-3.5-flash'
 
         model = genai.GenerativeModel(model_name)
         guideline_context = build_guideline_context(guidelines)
@@ -349,7 +349,7 @@ async def run_ai_content_correction(content: str, brand_name: str, guidelines: d
     try:
         genai.configure(api_key=api_key)
 
-        model_name = (settings.GEMINI_MODEL or 'gemini-1.5-flash').strip() or 'gemini-1.5-flash'
+        model_name = (settings.GEMINI_MODEL or 'gemini-3.5-flash').strip() or 'gemini-3.5-flash'
         model = genai.GenerativeModel(model_name)
         guideline_context = build_guideline_context(guidelines)
 
