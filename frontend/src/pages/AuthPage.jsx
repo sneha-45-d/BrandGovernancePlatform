@@ -14,6 +14,7 @@ import axios from 'axios'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth-context'
+import { getApiErrorMessage } from '../lib/apiError'
 import { loginLocalAccount, registerLocalAccount } from '../lib/localAuth'
 
 const brandFeatures = [
@@ -93,10 +94,10 @@ export default function AuthPage({ mode = 'signin' }) {
       signIn(session, formData.rememberMe)
       navigate('/dashboard', { replace: true })
     } catch (requestError) {
-      setError(
-        requestError.response?.data?.detail || requestError.message ||
-          'Could not connect to the account service. Check that the backend and database are running.'
-      )
+      setError(getApiErrorMessage(
+        requestError,
+        'Could not connect to the account service. Check that the backend and database are running.'
+      ))
     } finally {
       setIsSubmitting(false)
     }

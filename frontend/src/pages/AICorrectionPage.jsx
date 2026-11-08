@@ -11,22 +11,32 @@ import {
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import Sidebar from '../components/Sidebar'
-import { defaultGuidelines, loadBrandGuidelines, normalizeGuidelines } from '../lib/brandData'
+import { getApiErrorMessage } from '../lib/apiError'
+import { defaultGuidelines, getUserStorageKey, loadBrandGuidelines, normalizeGuidelines } from '../lib/brandData'
 
 export default function AICorrectionPage() {
   const [guidelines, setGuidelines] = useState(defaultGuidelines)
-  const [content, setContent] = useState(() => localStorage.getItem('brandithm-correction-content') || '')
+  const [content, setContent] = useState(() => localStorage.getItem(getUserStorageKey('brandithm-correction-content')) || '')
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [guidelinesLoading, setGuidelinesLoading] = useState(true)
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     let active = true
-    loadBrandGuidelines().then(({ guidelines: savedGuidelines }) => {
-      if (!active) return
-      setGuidelines(savedGuidelines)
-    })
+    const fetchGuidelines = async () => {
+      try {
+        const { guidelines: savedGuidelines } = await loadBrandGuidelines()
+        if (active) setGuidelines(savedGuidelines)
+      } catch (requestError) {
+        if (active) setError(getApiErrorMessage(requestError, 'Unable to load saved brand rules.'))
+      } finally {
+        if (active) setGuidelinesLoading(false)
+      }
+    }
+
+    fetchGuidelines()
     return () => { active = false }
   }, [])
 
@@ -46,7 +56,7 @@ export default function AICorrectionPage() {
       const payload = normalizeGuidelines(guidelines)
 
       const formData = new FormData()
-      formData.append('user_id', guidelines.user_id)
+      formData.append('user_id', payload.user_id)
       formData.append('brand_name', guidelines.brand_name)
       formData.append('content', content)
       formData.append('guidelines', JSON.stringify(payload))
@@ -56,12 +66,12 @@ export default function AICorrectionPage() {
       })
 
       setResult(response.data)
-      localStorage.setItem('brandithm-correction-content', content)
+      localStorage.setItem(getUserStorageKey('brandithm-correction-content'), content)
     } catch (requestError) {
-      setError(
-        requestError?.response?.data?.detail ||
-          'Unable to generate corrected content. Check the backend configuration or Gemini quota.'
-      )
+      setError(getApiErrorMessage(
+        requestError,
+        'Unable to generate corrected content. Check the backend configuration or Gemini quota.'
+      ))
     } finally {
       setLoading(false)
     }
@@ -127,6 +137,7 @@ export default function AICorrectionPage() {
                     <input
                       type="text"
                       value={guidelines.brand_name}
+                      disabled={guidelinesLoading}
                       onChange={(event) => setGuidelines((current) => ({ ...current, brand_name: event.target.value }))}
                       className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
                     />
@@ -151,7 +162,7 @@ export default function AICorrectionPage() {
 
                   <button
                     type="submit"
-                    disabled={loading}
+                    disabled={loading || guidelinesLoading}
                     className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 via-violet-500 to-blue-500 px-4 py-3.5 text-sm font-semibold text-white shadow-[0_22px_35px_rgba(79,70,229,0.28)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-80"
                   >
                     {loading ? (
@@ -159,6 +170,8 @@ export default function AICorrectionPage() {
                         <Loader2 className="h-4 w-4 animate-spin" />
                         Correcting content...
                       </>
+                    ) : guidelinesLoading ? (
+                      'Loading brand rules...'
                     ) : (
                       <>
                         Correct Content
@@ -199,7 +212,7 @@ export default function AICorrectionPage() {
                     <div className="mt-5 space-y-3">
                       <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
                         <p className="font-semibold">
-                          {result.engine === 'gemini' ? 'BRANDITHM AI result' : 'Local rules fallback'}
+                          {result.engine === 'gemini' ? `${guidelines.brand_name} AI result` : 'Local rules fallback'}
                         </p>
                         <p className="mt-1">{result.summary}</p>
                       </div>

@@ -13,10 +13,12 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
+import { getApiErrorMessage } from '../lib/apiError'
 import {
   defaultGuidelines,
   getCurrentUserId,
   getLocalAnalyses,
+  getUserStorageKey,
   loadBrandGuidelines,
   normalizeGuidelines,
   saveBrandGuidelines,
@@ -63,6 +65,7 @@ export default function ContentAnalysisPage() {
   const [content, setContent] = useState('')
   const [selectedFile, setSelectedFile] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [guidelinesLoading, setGuidelinesLoading] = useState(true)
   const [analysis, setAnalysis] = useState(null)
   const [error, setError] = useState('')
   const [history, setHistory] = useState(getLocalHistory)
@@ -91,9 +94,13 @@ export default function ContentAnalysisPage() {
     let cancelled = false
 
     const fetchGuidelines = async () => {
-      const { guidelines: savedGuidelines } = await loadBrandGuidelines()
-      if (!cancelled) {
-        setGuidelines(savedGuidelines)
+      try {
+        const { guidelines: savedGuidelines } = await loadBrandGuidelines()
+        if (!cancelled) setGuidelines(savedGuidelines)
+      } catch (requestError) {
+        if (!cancelled) setError(getApiErrorMessage(requestError, 'Unable to load saved brand rules.'))
+      } finally {
+        if (!cancelled) setGuidelinesLoading(false)
       }
     }
 
@@ -166,7 +173,7 @@ export default function ContentAnalysisPage() {
       const payload = normalizeGuidelines(guidelines)
 
       const formData = new FormData()
-      formData.append('user_id', guidelines.user_id)
+      formData.append('user_id', payload.user_id)
       formData.append('brand_name', guidelines.brand_name)
       formData.append('content_title', selectedFile ? selectedFile.name : 'Marketing copy review')
       formData.append('content', content)
@@ -200,12 +207,12 @@ export default function ContentAnalysisPage() {
       if (response.data.report_id) {
         void fetchHistory()
       }
-      localStorage.setItem('brandithm-analysis-content', content)
+      localStorage.setItem(getUserStorageKey('brandithm-analysis-content'), content)
     } catch (requestError) {
-      setError(
-        requestError?.response?.data?.detail ||
-          'Unable to connect to the AI content analysis service. Check the backend and API key configuration.'
-      )
+      setError(getApiErrorMessage(
+        requestError,
+        'Unable to connect to the AI content analysis service. Check the backend and API key configuration.'
+      ))
     } finally {
       setLoading(false)
     }
@@ -214,21 +221,21 @@ export default function ContentAnalysisPage() {
   const handleViewReport = async (reportId) => {
     try {
       const response = await axios.get(`/api/content/${reportId}`, {
-        params: { user_id: defaultGuidelines.user_id },
+        params: { user_id: getCurrentUserId() },
       })
       setAnalysis(response.data.analysis)
       setContent(response.data.content || '')
       setActiveReportId(reportId)
       setError('')
     } catch (requestError) {
-      setError('Unable to load the selected analysis report.')
+      setError(getApiErrorMessage(requestError, 'Unable to load the selected analysis report.'))
     }
   }
 
   const handleDeleteReport = async (reportId) => {
     try {
       await axios.delete(`/api/content/${reportId}`, {
-        params: { user_id: defaultGuidelines.user_id },
+        params: { user_id: getCurrentUserId() },
       })
       setHistory((current) => current.filter((item) => item.id !== reportId))
       if (reportId === activeReportId) {
@@ -236,7 +243,7 @@ export default function ContentAnalysisPage() {
         setActiveReportId(null)
       }
     } catch (requestError) {
-      setError('Unable to delete the selected analysis report.')
+      setError(getApiErrorMessage(requestError, 'Unable to delete the selected analysis report.'))
     }
   }
 
@@ -246,7 +253,7 @@ export default function ContentAnalysisPage() {
       return
     }
 
-    localStorage.setItem('brandithm-correction-content', content)
+    localStorage.setItem(getUserStorageKey('brandithm-correction-content'), content)
     navigate('/ai-correction')
   }
 
@@ -267,6 +274,7 @@ export default function ContentAnalysisPage() {
           <button
             type="button"
             onClick={handleSaveGuidelines}
+            disabled={guidelinesLoading}
             className="rounded-full bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
           >
             Save Brand Rules
@@ -293,6 +301,7 @@ export default function ContentAnalysisPage() {
                       type="text"
                       name="brand_name"
                       value={guidelines.brand_name}
+                      disabled={guidelinesLoading}
                       onChange={handleGuidelineChange}
                       className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
                     />
@@ -303,6 +312,7 @@ export default function ContentAnalysisPage() {
                     <textarea
                       name="brand_description"
                       value={guidelines.brand_description}
+                      disabled={guidelinesLoading}
                       onChange={handleGuidelineChange}
                       rows={3}
                       className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
@@ -315,6 +325,7 @@ export default function ContentAnalysisPage() {
                       type="text"
                       name="preferred_tone"
                       value={guidelines.preferred_tone}
+                      disabled={guidelinesLoading}
                       onChange={handleGuidelineChange}
                       className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
                     />
@@ -326,6 +337,7 @@ export default function ContentAnalysisPage() {
                       type="text"
                       name="target_audience"
                       value={guidelines.target_audience}
+                      disabled={guidelinesLoading}
                       onChange={handleGuidelineChange}
                       className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
                     />
@@ -337,6 +349,7 @@ export default function ContentAnalysisPage() {
                       type="text"
                       name="preferred_keywords"
                       value={Array.isArray(guidelines.preferred_keywords) ? guidelines.preferred_keywords.join(', ') : guidelines.preferred_keywords}
+                      disabled={guidelinesLoading}
                       onChange={handleGuidelineChange}
                       className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
                     />
@@ -348,6 +361,7 @@ export default function ContentAnalysisPage() {
                       type="text"
                       name="restricted_words"
                       value={Array.isArray(guidelines.restricted_words) ? guidelines.restricted_words.join(', ') : guidelines.restricted_words}
+                      disabled={guidelinesLoading}
                       onChange={handleGuidelineChange}
                       className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
                     />
@@ -385,7 +399,7 @@ export default function ContentAnalysisPage() {
 
                   <button
                     type="submit"
-                    disabled={loading}
+                    disabled={loading || guidelinesLoading}
                     className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 via-violet-500 to-blue-500 px-4 py-3.5 text-sm font-semibold text-white shadow-[0_22px_35px_rgba(79,70,229,0.28)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-80"
                   >
                     {loading ? (
@@ -393,6 +407,8 @@ export default function ContentAnalysisPage() {
                         <Loader2 className="h-4 w-4 animate-spin" />
                         Analyzing content...
                       </>
+                    ) : guidelinesLoading ? (
+                      'Loading brand rules...'
                     ) : (
                       <>
                         Analyze Content
