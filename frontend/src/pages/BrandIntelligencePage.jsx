@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react'
 import { AlertTriangle, ArrowRight, Loader2, Sparkles } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
-import { getApiErrorMessage } from '../lib/apiError'
 import { defaultGuidelines, loadBrandGuidelines, normalizeGuidelines, saveLocalAnalysis } from '../lib/brandData'
 
 export default function BrandIntelligencePage() {
@@ -52,7 +51,10 @@ export default function BrandIntelligencePage() {
         analysis: response.data.analysis,
       })
     } catch (requestError) {
-      setError(getApiErrorMessage(requestError, 'Unable to analyze this content. Check that the backend is running.'))
+      setError(
+        requestError?.response?.data?.detail ||
+          'Unable to analyze this content. Check that the backend is running.'
+      )
     } finally {
       setLoading(false)
     }

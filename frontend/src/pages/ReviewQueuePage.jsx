@@ -12,11 +12,9 @@ import {
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
-import { getApiErrorMessage } from '../lib/apiError'
 import {
   getCurrentUserId,
   getLocalAnalyses,
-  getUserStorageKey,
   updateLocalAnalysisReviewStatus,
 } from '../lib/brandData'
 
@@ -102,7 +100,8 @@ export default function ReviewQueuePage() {
       } catch (error) {
         if (!hasLocalCopy) {
           setActionError(
-            getApiErrorMessage(error, 'Could not save this review decision. Please try again.')
+            error?.response?.data?.detail ||
+              'Could not save this review decision. Please try again.'
           )
           setActiveAction('')
           return
@@ -137,7 +136,8 @@ export default function ReviewQueuePage() {
       setDetails((current) => ({ ...current, [review.id]: response.data }))
     } catch (error) {
       setActionError(
-        getApiErrorMessage(error, 'Could not load this review. Check the backend and database connection.')
+        error?.response?.data?.detail ||
+          'Could not load this review. Check the backend and database connection.'
       )
       setExpandedId('')
     }
@@ -153,13 +153,14 @@ export default function ReviewQueuePage() {
         reviewDetails = response.data
       } catch (error) {
         setActionError(
-          getApiErrorMessage(error, 'Could not load this review for correction. Check the backend and database connection.')
+          error?.response?.data?.detail ||
+            'Could not load this review for correction. Check the backend and database connection.'
         )
         return
       }
     }
 
-    localStorage.setItem(getUserStorageKey('brandithm-correction-content'), reviewDetails.content)
+    localStorage.setItem('brandithm-correction-content', reviewDetails.content)
     navigate('/ai-correction')
   }
 

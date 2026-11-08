@@ -3,7 +3,6 @@ import { AlertCircle, CheckCircle2, LogOut, Save, UserRound } from 'lucide-react
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
-import { getApiErrorMessage } from '../lib/apiError'
 import { useAuth } from '../lib/auth-context'
 import { updateLocalAccount } from '../lib/localAuth'
 
@@ -39,7 +38,7 @@ export default function AccountSettingsPage() {
     } catch (error) {
       setNotice({
         type: 'error',
-        text: getApiErrorMessage(error, 'Could not save your account settings. Please try again.'),
+        text: error.response?.data?.detail || 'Could not save your account settings. Please try again.',
       })
     } finally {
       setSaving(false)
@@ -53,7 +52,7 @@ export default function AccountSettingsPage() {
     } catch (error) {
       setNotice({
         type: 'error',
-        text: getApiErrorMessage(error, 'Signed out on this device, but the server session could not be ended.'),
+        text: error.response?.data?.detail || 'Signed out on this device, but the server session could not be ended.',
       })
     } finally {
       navigate('/signin', { replace: true })

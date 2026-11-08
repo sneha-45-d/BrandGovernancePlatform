@@ -12,7 +12,6 @@ import {
   LogOut,
 } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
-import { getApiErrorMessage } from '../lib/apiError'
 import { useAuth } from '../lib/auth-context'
 import { useState } from 'react'
 
@@ -38,7 +37,7 @@ export default function Sidebar({ score = null }) {
     try {
       await signOut()
     } catch (error) {
-      setLogoutError(getApiErrorMessage(error, 'Signed out on this device, but the server session could not be ended.'))
+      setLogoutError(error?.response?.data?.detail || 'Signed out on this device, but the server session could not be ended.')
     }
   }
 
