@@ -108,7 +108,7 @@ export default function AuthPage({ mode = 'signin' }) {
       <div className="auth-reference-inner mx-auto min-h-screen max-w-[1400px] px-4 py-6 sm:px-6 lg:px-10">
         <header className="mb-8 flex items-center justify-between px-2 pr-24 sm:px-4 sm:pr-24">
           <div className="flex items-center gap-3">
-            <div className="brand-mark flex h-11 w-11 items-center justify-center rounded-[14px] text-lg font-black text-white shadow-[0_12px_30px_rgba(16,185,129,0.28)]">
+            <div className="brand-mark flex h-11 w-11 items-center justify-center rounded-[14px] text-lg font-black text-white shadow-[0_12px_30px_rgba(123,92,255,0.35)]">
               B
             </div>
             <div className="text-2xl font-black tracking-[-0.06em] text-slate-900 sm:text-3xl">BRANDITHM</div>
@@ -118,7 +118,7 @@ export default function AuthPage({ mode = 'signin' }) {
             {[0, 1, 2, 3, 4, 5].map((dot) => (
               <span
                 key={dot}
-                className="block h-2.5 w-2.5 rounded-full bg-emerald-200/80"
+                className="block h-2.5 w-2.5 rounded-full bg-violet-200/80"
                 style={{ opacity: dot % 2 === 0 ? 0.85 : 0.5 }}
               />
             ))}
@@ -141,7 +141,7 @@ export default function AuthPage({ mode = 'signin' }) {
               <ul className="mt-8 space-y-5">
                 {brandFeatures.map(({ icon: Icon, text }) => (
                   <li key={text} className="flex items-center gap-4 text-[1.04rem] font-medium text-slate-700">
-                    <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 shadow-[inset_0_0_0_1px_rgba(16,185,129,0.12)]">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-100 text-violet-600 shadow-[inset_0_0_0_1px_rgba(139,92,246,0.12)]">
                       <Icon className="h-4 w-4" />
                     </span>
                     <span>{text}</span>
@@ -156,7 +156,7 @@ export default function AuthPage({ mode = 'signin' }) {
               <div className="text-[0.7rem] font-bold uppercase tracking-[0.28em] text-slate-500">
                 {isSignIn ? 'Sign In' : 'Create Account'}
               </div>
-              <Link to={isSignIn ? '/signup' : '/signin'} className="inline-flex items-center gap-1 text-sm font-semibold text-emerald-700 transition hover:text-emerald-600">
+              <Link to={isSignIn ? '/signup' : '/signin'} className="inline-flex items-center gap-1 text-sm font-semibold text-violet-600 transition hover:text-violet-500">
                 <span>{isSignIn ? 'Create account' : 'Sign in'}</span>
                 <ArrowRight className="h-4 w-4" />
               </Link>
@@ -234,7 +234,7 @@ export default function AuthPage({ mode = 'signin' }) {
                       name="rememberMe"
                       checked={formData.rememberMe}
                       onChange={handleChange}
-                      className="h-4 w-4 rounded border-slate-300 text-emerald-700 focus:ring-emerald-500"
+                      className="h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500"
                     />
                     <span>Remember Me</span>
                   </label>
@@ -251,7 +251,7 @@ export default function AuthPage({ mode = 'signin' }) {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-emerald-700 via-green-600 to-teal-500 px-4 py-3.5 text-lg font-bold text-white shadow-[0_14px_28px_rgba(5,150,105,0.28)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_30px_rgba(5,150,105,0.34)] disabled:cursor-not-allowed disabled:opacity-75"
+                className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-violet-600 via-indigo-600 to-blue-500 px-4 py-3.5 text-lg font-bold text-white shadow-[0_14px_28px_rgba(96,83,255,0.35)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_30px_rgba(96,83,255,0.4)] disabled:cursor-not-allowed disabled:opacity-75"
               >
                 <span>{isSubmitting ? (isSignIn ? 'Signing in...' : 'Creating account...') : isSignIn ? 'Sign In' : 'Create Account'}</span>
                 <ArrowRight className="h-4 w-4" />
@@ -275,7 +275,7 @@ export default function AuthPage({ mode = 'signin' }) {
 
             <p className="mt-5 text-center text-base text-slate-500">
               {isSignIn ? 'Need an account? ' : 'Already have an account? '}
-              <Link to={isSignIn ? '/signup' : '/signin'} className="font-bold text-emerald-700 hover:text-emerald-600">
+              <Link to={isSignIn ? '/signup' : '/signin'} className="font-bold text-violet-600 hover:text-violet-500">
                 {isSignIn ? 'Create Account' : 'Sign In'}
               </Link>
             </p>

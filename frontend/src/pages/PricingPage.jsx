@@ -39,7 +39,7 @@ export default function PricingPage() {
       <header className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
         <nav className="flex items-center justify-between rounded-full border border-slate-200/80 bg-white/80 px-4 py-3 shadow-[0_18px_45px_rgba(15,23,42,0.06)] backdrop-blur-xl sm:px-5">
           <Link to="/" className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-950 text-sm font-bold text-white shadow-lg shadow-slate-200">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-950 text-sm font-bold text-white shadow-lg shadow-slate-200">
               B
             </div>
             <div>
@@ -63,7 +63,7 @@ export default function PricingPage() {
             </Link>
             <Link
               to="/signup"
-              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-emerald-600 to-green-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-200 transition hover:translate-y-[-1px] hover:shadow-xl hover:shadow-emerald-200/80"
+              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition hover:translate-y-[-1px] hover:shadow-xl hover:shadow-indigo-200/80"
             >
               Get started
               <ArrowRight className="h-4 w-4" />
@@ -74,7 +74,7 @@ export default function PricingPage() {
 
       <main className="mx-auto max-w-7xl px-4 pb-20 pt-10 sm:px-6 lg:px-8">
         <section className="text-center">
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.28em] text-emerald-700 shadow-sm">
+          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.28em] text-indigo-700 shadow-sm">
             <Sparkles className="h-3.5 w-3.5" />
             Pricing
           </div>
@@ -92,14 +92,14 @@ export default function PricingPage() {
               key={plan.name}
               className={`rounded-[2rem] border p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)] ${
                 plan.featured
-                  ? 'border-emerald-200 bg-emerald-950 text-white shadow-[0_22px_60px_rgba(16,120,78,0.18)]'
+                  ? 'border-indigo-200 bg-slate-950 text-white shadow-[0_22px_60px_rgba(79,70,229,0.18)]'
                   : 'border-slate-200 bg-white text-slate-900'
               }`}
             >
               <div className="flex items-center justify-between">
                 <h2 className={`text-2xl font-bold ${plan.featured ? 'text-white' : 'text-slate-900'}`}>{plan.name}</h2>
                 {plan.featured && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-200">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-indigo-500/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-indigo-200">
                     <Star className="h-3.5 w-3.5" />
                     Popular
                   </span>
@@ -118,7 +118,7 @@ export default function PricingPage() {
                 className={`mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-semibold ${
                   plan.featured
                     ? 'bg-white text-slate-950 shadow-lg'
-                    : 'bg-emerald-950 text-white hover:bg-green-900'
+                    : 'bg-slate-950 text-white hover:bg-slate-800'
                 }`}
               >
                 {plan.name === 'Enterprise' ? 'Talk to sales' : 'Start free trial'}
@@ -128,7 +128,7 @@ export default function PricingPage() {
               <div className="mt-6 space-y-3">
                 {plan.features.map((feature) => (
                   <div key={feature} className="flex items-start gap-3">
-                    <div className={`mt-0.5 flex h-5 w-5 items-center justify-center rounded-full ${plan.featured ? 'bg-emerald-500/20 text-emerald-200' : 'bg-emerald-100 text-emerald-600'}`}>
+                    <div className={`mt-0.5 flex h-5 w-5 items-center justify-center rounded-full ${plan.featured ? 'bg-indigo-500/20 text-indigo-200' : 'bg-emerald-100 text-emerald-600'}`}>
                       <Check className="h-3.5 w-3.5" />
                     </div>
                     <span className={plan.featured ? 'text-slate-200' : 'text-slate-700'}>{feature}</span>
@@ -141,7 +141,7 @@ export default function PricingPage() {
 
         <section className="mt-16 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)] sm:p-8">
           <div className="mb-6 flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-600">
               <ShieldCheck className="h-5 w-5" />
             </div>
             <div>
