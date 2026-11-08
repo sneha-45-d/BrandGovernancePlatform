@@ -11,6 +11,9 @@ import BrandIntelligencePage from './pages/BrandIntelligencePage'
 import BrandGuidelinesPage from './pages/BrandGuidelinesPage'
 import ReviewQueuePage from './pages/ReviewQueuePage'
 import AccountSettingsPage from './pages/AccountSettingsPage'
+import CompetitorManagePage from './pages/CompetitorManagePage'
+import LeaderboardPage from './pages/LeaderboardPage'
+import VisualCheckPage from './pages/VisualCheckPage'
 import LandingPage from './pages/LandingPage'
 import { AuthProvider } from './lib/AuthContext'
 import { useAuth } from './lib/auth-context'
@@ -58,6 +61,9 @@ function AppShell() {
           <Route path="/brand-intelligence" element={<BrandIntelligencePage />} />
           <Route path="/brand-guidelines" element={<BrandGuidelinesPage />} />
           <Route path="/review-queue" element={<ReviewQueuePage />} />
+          <Route path="/competitors" element={<CompetitorManagePage />} />
+          <Route path="/leaderboard" element={<LeaderboardPage />} />
+          <Route path="/visual-check" element={<VisualCheckPage />} />
           <Route path="/settings" element={<AccountSettingsPage />} />
         </Route>
       </Routes>

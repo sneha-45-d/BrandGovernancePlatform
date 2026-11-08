@@ -9,11 +9,14 @@ import {
   Sparkles,
   Upload,
   Wand2,
+  Trophy,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
 import { getApiErrorMessage } from '../lib/apiError'
+import ToneAnalysisPanel from '../components/ToneAnalysisPanel'
+import ClashAlert from '../components/ClashAlert'
 import {
   defaultGuidelines,
   getCurrentUserId,
@@ -187,14 +190,20 @@ export default function ContentAnalysisPage() {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
 
-      setAnalysis(response.data.analysis)
+      const analysisResult = {
+        ...response.data.analysis,
+        clash_report: response.data.clash_report || response.data.analysis?.clash_report,
+        champion_update: response.data.champion_update,
+      }
+
+      setAnalysis(analysisResult)
       setActiveReportId(response.data.report_id || null)
       const localEntry = saveLocalAnalysis({
         reportId: response.data.report_id,
         title: selectedFile ? selectedFile.name : 'Marketing copy review',
         brandName: guidelines.brand_name,
         content,
-        analysis: response.data.analysis,
+        analysis: analysisResult,
       })
       setHistory((current) => [
         {
@@ -262,7 +271,7 @@ export default function ContentAnalysisPage() {
       <div className="mx-auto max-w-7xl px-4 py-6 lg:px-6">
         <div className="surface-panel mb-6 flex flex-col gap-4 rounded-[2rem] p-4 shadow-[0_18px_45px_rgba(15,23,42,0.06)] lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-100 to-violet-100 text-indigo-600 shadow-inner">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-100 to-green-100 text-emerald-600 shadow-inner">
               <Sparkles className="h-5 w-5" />
             </div>
             <div>
@@ -275,7 +284,7 @@ export default function ContentAnalysisPage() {
             type="button"
             onClick={handleSaveGuidelines}
             disabled={guidelinesLoading}
-            className="rounded-full bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+            className="rounded-full bg-emerald-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-green-900"
           >
             Save Brand Rules
           </button>
@@ -303,7 +312,7 @@ export default function ContentAnalysisPage() {
                       value={guidelines.brand_name}
                       disabled={guidelinesLoading}
                       onChange={handleGuidelineChange}
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
                     />
                   </div>
 
@@ -315,7 +324,7 @@ export default function ContentAnalysisPage() {
                       disabled={guidelinesLoading}
                       onChange={handleGuidelineChange}
                       rows={3}
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
                     />
                   </div>
 
@@ -327,7 +336,7 @@ export default function ContentAnalysisPage() {
                       value={guidelines.preferred_tone}
                       disabled={guidelinesLoading}
                       onChange={handleGuidelineChange}
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
                     />
                   </div>
 
@@ -339,7 +348,7 @@ export default function ContentAnalysisPage() {
                       value={guidelines.target_audience}
                       disabled={guidelinesLoading}
                       onChange={handleGuidelineChange}
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
                     />
                   </div>
 
@@ -351,7 +360,7 @@ export default function ContentAnalysisPage() {
                       value={Array.isArray(guidelines.preferred_keywords) ? guidelines.preferred_keywords.join(', ') : guidelines.preferred_keywords}
                       disabled={guidelinesLoading}
                       onChange={handleGuidelineChange}
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
                     />
                   </div>
 
@@ -363,7 +372,7 @@ export default function ContentAnalysisPage() {
                       value={Array.isArray(guidelines.restricted_words) ? guidelines.restricted_words.join(', ') : guidelines.restricted_words}
                       disabled={guidelinesLoading}
                       onChange={handleGuidelineChange}
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
                     />
                   </div>
 
@@ -374,12 +383,12 @@ export default function ContentAnalysisPage() {
                       onChange={handleTextChange}
                       rows={9}
                       placeholder="Paste an ad, product description, campaign caption, or marketing message to review..."
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
                     />
                   </div>
 
                   <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4">
-                    <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-indigo-200 hover:text-indigo-700">
+                    <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-emerald-200 hover:text-emerald-700">
                       <Upload className="h-4 w-4" />
                       <span>{selectedFile ? selectedFile.name : 'Upload PDF or DOCX'}</span>
                       <input
@@ -400,7 +409,7 @@ export default function ContentAnalysisPage() {
                   <button
                     type="submit"
                     disabled={loading || guidelinesLoading}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 via-violet-500 to-blue-500 px-4 py-3.5 text-sm font-semibold text-white shadow-[0_22px_35px_rgba(79,70,229,0.28)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-80"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-emerald-600 via-green-500 to-emerald-500 px-4 py-3.5 text-sm font-semibold text-white shadow-[0_22px_35px_rgba(16,120,78,0.28)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-80"
                   >
                     {loading ? (
                       <>
@@ -445,12 +454,12 @@ export default function ContentAnalysisPage() {
                         value={searchTerm}
                         onChange={(event) => setSearchTerm(event.target.value)}
                         placeholder="Search report"
-                        className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-300"
+                        className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-emerald-300"
                       />
                       <select
                         value={statusFilter}
                         onChange={(event) => setStatusFilter(event.target.value)}
-                        className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-300"
+                        className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-emerald-300"
                       >
                         <option value="all">All status</option>
                         <option value="completed">Completed</option>
@@ -460,7 +469,7 @@ export default function ContentAnalysisPage() {
                         type="date"
                         value={dateFilter}
                         onChange={(event) => setDateFilter(event.target.value)}
-                        className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-300"
+                        className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-emerald-300"
                       />
                     </div>
 
@@ -476,7 +485,7 @@ export default function ContentAnalysisPage() {
                               <p className="font-medium text-slate-800">{item.title || item.brand_name}</p>
                               <p className="mt-1 text-[11px] text-slate-500">{item.brand_name} • {item.created_at ? new Date(item.created_at).toLocaleString() : 'Just now'}</p>
                             </div>
-                            <span className="rounded-full bg-indigo-100 px-2 py-1 text-[10px] font-semibold text-indigo-700">
+                            <span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-semibold text-emerald-700">
                               {formatScore(item.overall_score)}
                             </span>
                           </div>
@@ -485,7 +494,7 @@ export default function ContentAnalysisPage() {
                             <button
                               type="button"
                               onClick={() => handleViewReport(item.id)}
-                              className="rounded-full bg-slate-900 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-slate-700"
+                              className="rounded-full bg-emerald-950 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-green-900"
                             >
                               View report
                             </button>
@@ -511,6 +520,31 @@ export default function ContentAnalysisPage() {
 
             {analysis && (
               <section className="space-y-6">
+                {/* Champion Points Toast */}
+                {analysis.champion_update && (
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-amber-300 bg-gradient-to-r from-amber-50 via-yellow-50 to-orange-50 p-4 text-amber-950 shadow-xs">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500 text-white shadow-sm">
+                        <Trophy className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-wider text-amber-800">Brand Champion Reward</p>
+                        <p className="text-sm font-semibold">
+                          +{analysis.champion_update.points_earned} points earned! Total Score: {analysis.champion_update.champion_score} pts ({analysis.champion_update.streak_days}-day streak)
+                        </p>
+                      </div>
+                    </div>
+                    {(analysis.champion_update.new_badges || []).length > 0 && (
+                      <div className="flex items-center gap-1.5 rounded-full bg-amber-200/70 px-3 py-1 text-xs font-bold text-amber-900">
+                        <span>🏆 Badge Unlocked: {analysis.champion_update.new_badges.join(', ')}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Competitor IP Clash Alert */}
+                <ClashAlert clashReport={analysis.clash_report} />
+
                 {analysis.warning && (
                   <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
                     <p className="font-semibold">
@@ -524,20 +558,25 @@ export default function ContentAnalysisPage() {
                     <div key={key} className="surface-panel rounded-[2rem] p-5 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
                       <div className="mb-4 flex items-center justify-between">
                         <p className="text-sm text-slate-500">{label}</p>
-                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-100 text-indigo-600">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
                           <Icon className="h-4 w-4" />
                         </span>
                       </div>
                       <div className="text-3xl font-black tracking-tight text-slate-950">{formatScore(analysis[key])}</div>
                       <div className="mt-4 h-2.5 rounded-full bg-slate-200">
                         <div
-                          className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-violet-500 to-blue-500"
+                          className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-500"
                           style={{ width: `${Math.min(100, Number(analysis[key]) || 0)}%` }}
                         />
                       </div>
                     </div>
                   ))}
                 </div>
+
+                {/* Multi-Dimensional Tone Analysis */}
+                {analysis.tone_analysis && (
+                  <ToneAnalysisPanel toneData={analysis.tone_analysis} />
+                )}
 
                 <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
                   <div className="surface-panel rounded-[2rem] p-6 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
@@ -574,7 +613,7 @@ export default function ContentAnalysisPage() {
 
                   <div className="surface-panel rounded-[2rem] p-6 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
                     <div className="mb-4 flex items-center gap-3">
-                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-100 text-violet-700">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-100 text-green-700">
                         <Sparkles className="h-4 w-4" />
                       </span>
                       <div>
@@ -617,7 +656,7 @@ export default function ContentAnalysisPage() {
                     <button
                       type="button"
                       onClick={handleSendToCorrection}
-                      className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 via-violet-500 to-blue-500 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_18px_35px_rgba(79,70,229,0.25)] transition hover:-translate-y-0.5"
+                      className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-emerald-600 via-green-500 to-emerald-500 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_18px_35px_rgba(16,120,78,0.25)] transition hover:-translate-y-0.5"
                     >
                       Send to AI Correction
                       <ArrowRight className="h-4 w-4" />

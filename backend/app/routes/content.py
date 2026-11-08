@@ -22,6 +22,7 @@ from pymongo.errors import PyMongoError
 from app.config import settings
 from app.database import local_store
 from app.database.mongo import get_db
+from app.services import clash_service, scoring_service, tone_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -127,12 +128,15 @@ def build_local_analysis(content: str, brand_name: str, guidelines: dict) -> dic
     score = max(40, 100 - (issue_count * 16) - tone_penalty)
     score = min(score, 98)
 
+    tone_report = tone_service.analyze_tone_local(content, guidelines)
+
     return {
         'overall_score': int(score),
         'brand_compliance_score': int(max(50, score - 4)),
         'tone_consistency': int(max(50, score - 7)),
         'grammar_score': 93,
         'readability_score': 91,
+        'tone_analysis': tone_report,
         'violations': violations or [{
             'title': 'No critical brand violations detected',
             'severity': 'low',
@@ -259,9 +263,18 @@ def serialize_analysis_record(record: dict) -> dict | None:
     }
 
 
+def is_valid_gemini_key(key: str | None) -> bool:
+    if not key:
+        return False
+    cleaned = key.strip().lower()
+    if not cleaned or 'your-' in cleaned or 'placeholder' in cleaned or 'replace' in cleaned:
+        return False
+    return True
+
+
 async def run_ai_brand_analysis(content: str, brand_name: str, guidelines: dict) -> dict:
     api_key = settings.GOOGLE_API_KEY or ''
-    if not api_key:
+    if not is_valid_gemini_key(api_key):
         return build_local_analysis(content, brand_name, guidelines)
 
     try:
@@ -323,12 +336,17 @@ Rules:
         )
         parsed = parse_ai_json_response(response.text)
 
+        tone_report = parsed.get('tone_analysis')
+        if not isinstance(tone_report, dict) or 'detected' not in tone_report:
+            tone_report = tone_service.analyze_tone_local(content, guidelines)
+
         return {
             'overall_score': int(parsed.get('overall_score', 0)),
             'brand_compliance_score': int(parsed.get('brand_compliance_score', 0)),
             'tone_consistency': int(parsed.get('tone_consistency', 0)),
             'grammar_score': int(parsed.get('grammar_score', 0)),
             'readability_score': int(parsed.get('readability_score', 0)),
+            'tone_analysis': tone_report,
             'violations': parsed.get('violations') or [],
             'critical_issues': parsed.get('critical_issues') or [],
             'recommendations': parsed.get('recommendations') or [],
@@ -343,7 +361,7 @@ Rules:
 
 async def run_ai_content_correction(content: str, brand_name: str, guidelines: dict) -> dict:
     api_key = settings.GOOGLE_API_KEY or ''
-    if not api_key:
+    if not is_valid_gemini_key(api_key):
         return build_local_correction(content, brand_name, guidelines)
 
     try:
@@ -687,6 +705,24 @@ async def analyze_content(
         }
 
     analysis = await run_ai_brand_analysis(cleaned_content, brand_name, guideline_payload)
+
+    # Competitor IP & Clash Detection check
+    try:
+        competitors = local_store.get_competitors(user_id)
+        clash_report = clash_service.check_competitor_clashes(cleaned_content, competitors)
+    except Exception as exc:
+        logger.warning('Competitor clash check failed: %s', exc)
+        clash_report = {'has_clashes': False, 'risk_level': 'none', 'clashes': [], 'summary': 'Clash scan skipped.'}
+
+    analysis['clash_report'] = clash_report
+
+    # Gamified Champion Scoring update
+    try:
+        champion_update = scoring_service.process_analysis_score(user_id, analysis)
+    except Exception as exc:
+        logger.warning('Champion scoring update failed: %s', exc)
+        champion_update = {'points_earned': 10, 'champion_score': 10, 'streak_days': 1, 'badges': [], 'new_badges': []}
+
     record = {
         'user_id': user_id,
         'brand_name': brand_name,
@@ -718,6 +754,8 @@ async def analyze_content(
         'message': 'Content analyzed successfully.',
         'brand_name': brand_name,
         'analysis': analysis,
+        'clash_report': clash_report,
+        'champion_update': champion_update,
         'report_id': str(record.get('_id')) if record.get('_id') else None,
         'file_name': file.filename if file else None,
         'storage': storage if record.get('_id') else 'none',

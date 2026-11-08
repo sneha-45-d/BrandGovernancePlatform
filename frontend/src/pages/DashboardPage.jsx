@@ -157,7 +157,7 @@ export default function DashboardPage() {
       <div className="mx-auto max-w-7xl px-4 py-6 lg:px-6">
         <div className="surface-panel mb-6 flex flex-col gap-4 rounded-[2rem] p-4 shadow-[0_18px_45px_rgba(15,23,42,0.06)] backdrop-blur-sm lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-100 to-violet-100 text-indigo-600 shadow-inner">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-100 to-green-100 text-emerald-600 shadow-inner">
               <Sparkles className="h-5 w-5" />
             </div>
             <div>
@@ -177,7 +177,7 @@ export default function DashboardPage() {
                 className="w-full bg-transparent outline-none placeholder:text-slate-400 sm:w-40"
               />
             </label>
-            <Link to="/content-analysis" className="inline-flex items-center justify-center gap-2 rounded-full bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:bg-slate-800">
+            <Link to="/content-analysis" className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-emerald-700 via-green-600 to-teal-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-900/15 transition hover:-translate-y-0.5 hover:shadow-emerald-900/25">
               <Sparkles className="h-4 w-4" /> New review
             </Link>
           </div>
@@ -203,11 +203,11 @@ export default function DashboardPage() {
                   <div className="h-72">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={chartData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                        <XAxis dataKey="name" stroke="#64748b" />
-                        <YAxis stroke="#64748b" domain={[0, 100]} />
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
+                        <XAxis dataKey="name" stroke="var(--chart-label)" />
+                        <YAxis stroke="var(--chart-label)" domain={[0, 100]} />
                         <Tooltip />
-                        <Bar dataKey="score" name="Brand score" radius={[10, 10, 0, 0]} fill="#4f46e5" />
+                        <Bar dataKey="score" name="Brand score" radius={[10, 10, 0, 0]} fill="#059669" />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -216,7 +216,7 @@ export default function DashboardPage() {
                     <BarChart3 className="h-8 w-8 text-slate-400" />
                     <p className="mt-3 font-semibold text-slate-800">No review scores yet</p>
                     <p className="mt-1 text-sm text-slate-500">Analyze content to populate your brand score trend.</p>
-                    <Link to="/brand-intelligence" className="mt-4 text-sm font-semibold text-indigo-700">Start a brand review</Link>
+                    <Link to="/brand-intelligence" className="mt-4 text-sm font-semibold text-emerald-700">Start a brand review</Link>
                   </div>
                 )}
               </div>
@@ -227,14 +227,14 @@ export default function DashboardPage() {
                     <p className="text-sm text-slate-500">Workspace</p>
                     <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-950">Brand setup</h2>
                   </div>
-                  <BookOpenText className="h-5 w-5 text-indigo-600" />
+                  <BookOpenText className="h-5 w-5 text-emerald-600" />
                 </div>
                 <p className="mt-3 text-sm leading-6 text-slate-600">Manage the rules that guide every content review and AI correction.</p>
                 <div className="mt-6 space-y-3">
-                  <Link to="/brand-guidelines" className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700">
+                  <Link to="/brand-guidelines" className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700">
                     Edit brand guidelines <ArrowRight className="h-4 w-4" />
                   </Link>
-                  <Link to="/brand-intelligence" className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700">
+                  <Link to="/brand-intelligence" className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700">
                     Run brand intelligence <ArrowRight className="h-4 w-4" />
                   </Link>
                 </div>
@@ -247,7 +247,7 @@ export default function DashboardPage() {
                   <p className="text-sm text-slate-500">Recent activity</p>
                   <h2 className="text-2xl font-bold tracking-tight text-slate-950">Latest content reviews</h2>
                 </div>
-                <Link to="/content-analysis" className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:border-indigo-200 hover:text-indigo-700">
+                <Link to="/content-analysis" className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:border-emerald-200 hover:text-emerald-700">
                   All reports <ArrowRight className="h-3.5 w-3.5" />
                 </Link>
               </div>
@@ -279,7 +279,7 @@ export default function DashboardPage() {
                   <p className="mt-3 font-semibold text-slate-800">{search ? 'No matching reviews' : 'No content reviews yet'}</p>
                   <p className="mt-1 text-sm text-slate-500">{search ? 'Try another search.' : 'Run your first analysis to see real review activity here.'}</p>
                   {!search && (
-                    <Link to="/brand-intelligence" className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-indigo-700">
+                    <Link to="/brand-intelligence" className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-emerald-700">
                       Start a review <ArrowRight className="h-4 w-4" />
                     </Link>
                   )}
