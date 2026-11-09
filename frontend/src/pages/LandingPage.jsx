@@ -12,8 +12,6 @@ import {
   ShieldCheck,
   Sparkles,
   WandSparkles,
-  Sun,
-  Moon,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../lib/auth-context'
@@ -136,15 +134,6 @@ export default function LandingPage() {
   const primaryLabel = user ? 'Open your workspace' : 'Get started'
 
   const [showIntro, setShowIntro] = useState(true)
-  const [theme, setTheme] = useState(() => {
-    if (typeof window === 'undefined') return 'light'
-    return document.body.dataset.theme || window.localStorage.getItem('brandithm-theme') || 'light'
-  })
-
-  useEffect(() => {
-    document.body.dataset.theme = theme
-    window.localStorage.setItem('brandithm-theme', theme)
-  }, [theme])
 
   useEffect(() => {
     const timer = window.setTimeout(() => setShowIntro(false), 4200)
@@ -310,13 +299,13 @@ export default function LandingPage() {
           color: #fff !important;
           background: linear-gradient(110deg, #08734f 0%, #0b9663 52%, #22ad78 100%) !important;
         }
-        body[data-theme='light'] .landing-shell .border-white\/15,
-        body[data-theme='light'] .landing-shell .border-white\/10 {
+        body[data-theme='light'] .landing-shell .border-white\\/15,
+        body[data-theme='light'] .landing-shell .border-white\\/10 {
           border-color: rgba(31,91,64,.18) !important;
         }
-        body[data-theme='light'] .landing-shell .bg-white\/[0.04],
-        body[data-theme='light'] .landing-shell .bg-white\/[0.025],
-        body[data-theme='light'] .landing-shell .bg-white\/[0.035] {
+        body[data-theme='light'] .landing-shell .bg-white\\/[0.04],
+        body[data-theme='light'] .landing-shell .bg-white\\/[0.025],
+        body[data-theme='light'] .landing-shell .bg-white\\/[0.035] {
           background: rgba(255,255,255,.55) !important;
         }
         body[data-theme='light'] .landing-shell .brandithm-logo .brandithm-display { color: #153b2b !important; }
@@ -329,16 +318,6 @@ export default function LandingPage() {
           </div>
         </div>
       )}
-
-      <button
-        type="button"
-        className="app-theme-toggle"
-        onClick={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')}
-        aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-      >
-        {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
-        {theme === 'dark' ? 'Light mode' : 'Dark mode'}
-      </button>
 
       <main className="landing-shell min-h-screen">
         <div className="landing-content relative z-10 mx-auto max-w-7xl px-5 pb-12 sm:px-8 lg:px-10">
