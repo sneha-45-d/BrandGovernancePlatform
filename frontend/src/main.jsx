@@ -4,7 +4,10 @@ import axios from 'axios'
 import './index.css'
 import App from './App.jsx'
 
-axios.defaults.baseURL = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/+$/, '')
+const defaultProductionApi = 'https://backend-production-fe59.up.railway.app'
+const apiBase = (import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? defaultProductionApi : '')).trim().replace(/\/+$/, '')
+
+axios.defaults.baseURL = apiBase
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

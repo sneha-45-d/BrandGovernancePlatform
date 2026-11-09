@@ -68,12 +68,11 @@ export default function VisualCheckPage() {
     formData.append('user_id', getCurrentUserId())
 
     try {
-      const res = await axios.post('/api/visual/check', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      })
+      const res = await axios.post('/api/visual/check', formData)
       setReport(res.data)
     } catch (err) {
-      setError(err?.response?.data?.detail || 'Visual analysis failed.')
+      const msg = err?.response?.data?.detail || err?.response?.data?.message || err?.message || 'Visual analysis failed.'
+      setError(typeof msg === 'string' ? msg : JSON.stringify(msg))
     } finally {
       setLoading(false)
     }
