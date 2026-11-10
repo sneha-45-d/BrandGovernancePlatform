@@ -103,12 +103,15 @@ def require_user(authorization: str | None) -> tuple[dict, str]:
             'token_hash': token_hash,
             'expires_at': {'$gt': datetime.now(timezone.utc)},
         })
-        if not session:
-            raise HTTPException(status_code=401, detail='Your session has expired. Please sign in again.')
-        user = users_collection.find_one({'_id': session['user_id']})
-        if not user:
-            raise HTTPException(status_code=401, detail='Account not found. Please sign in again.')
-        return user, token_hash
+        if session:
+            user = users_collection.find_one({'_id': session['user_id']})
+            if user:
+                return user, token_hash
+        # Fallback to local store session if not found in Mongo
+        local_user = local_store.get_session_user(token_hash)
+        if local_user:
+            return local_user, token_hash
+        raise HTTPException(status_code=401, detail='Your session has expired. Please sign in again.')
     except PyMongoError:
         try:
             user = local_store.get_session_user(token_hash)
@@ -151,22 +154,27 @@ def register_user(payload: RegisterRequest):
 
 @router.post('/auth/login')
 def login_user(payload: LoginRequest):
+    normalized = normalize_email(str(payload.email))
+    user = None
     try:
-        user = users_collection.find_one({'email': normalize_email(str(payload.email))})
+        user = users_collection.find_one({'email': normalized})
     except PyMongoError:
-        try:
-            user = local_store.find_user_by_email(normalize_email(str(payload.email)))
-            if not user or not verify_password(payload.password, user.get('password_hash')):
-                raise HTTPException(status_code=401, detail='Email or password is incorrect.')
-            token = local_store.create_session(user['id'])
-            return {'token': token, 'user': public_user(user), 'storage': 'server-local'}
-        except sqlite3.Error as exc:
-            raise HTTPException(status_code=503, detail='Account storage is temporarily unavailable.') from exc
+        user = None
 
-    if not user or not verify_password(payload.password, user.get('password_hash')):
-        raise HTTPException(status_code=401, detail='Email or password is incorrect.')
-    token = create_session(user['_id'])
-    return {'token': token, 'user': public_user(user)}
+    if user and verify_password(payload.password, user.get('password_hash')):
+        token = create_session(user['_id'])
+        return {'token': token, 'user': public_user(user)}
+
+    # Fallback to local store user
+    try:
+        local_user = local_store.find_user_by_email(normalized)
+        if local_user and verify_password(payload.password, local_user.get('password_hash')):
+            token = local_store.create_session(local_user['id'])
+            return {'token': token, 'user': public_user(local_user), 'storage': 'server-local'}
+    except sqlite3.Error as exc:
+        raise HTTPException(status_code=503, detail='Account storage is temporarily unavailable.') from exc
+
+    raise HTTPException(status_code=401, detail='Email or password is incorrect.')
 
 
 @router.get('/auth/me')

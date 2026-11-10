@@ -119,7 +119,7 @@ def build_local_violation_list(content: str, restricted_words: list[str]) -> lis
     return violations
 
 
-def build_local_analysis(content: str, brand_name: str, guidelines: dict) -> dict:
+def build_local_analysis(content: str, brand_name: str, guidelines: dict, warning_msg: str | None = None) -> dict:
     restricted_words = normalize_list((guidelines or {}).get('restricted_words') or [])
     violations = build_local_violation_list(content, restricted_words)
 
@@ -129,6 +129,8 @@ def build_local_analysis(content: str, brand_name: str, guidelines: dict) -> dic
     score = min(score, 98)
 
     tone_report = tone_service.analyze_tone_local(content, guidelines)
+
+    default_warning = 'Gemini AI is unavailable or rate-limited. This result uses local rule checks, not an AI model.'
 
     return {
         'overall_score': int(score),
@@ -145,8 +147,8 @@ def build_local_analysis(content: str, brand_name: str, guidelines: dict) -> dic
         'critical_issues': [
             {
                 'title': 'Brand safety fallback used',
-                'description': 'The live Gemini service was unavailable or quota-limited, so a local policy check was used for this review.',
-                'recommendation': 'Reconnect or refresh the Gemini API key to enable full AI-powered analysis.'
+                'description': warning_msg or 'The live Gemini service was temporarily unavailable or quota-limited, so a local policy check was used for this review.',
+                'recommendation': 'The system will automatically resume Gemini AI reviews when quota resets.'
             }
         ] if not violations else [],
         'recommendations': [
@@ -162,11 +164,11 @@ def build_local_analysis(content: str, brand_name: str, guidelines: dict) -> dic
         ),
         'improved_content': content.strip(),
         'engine': 'local',
-        'warning': 'Gemini is unavailable or not configured. This result uses local rule checks, not an AI model.',
+        'warning': warning_msg or default_warning,
     }
 
 
-def build_local_correction(content: str, brand_name: str, guidelines: dict) -> dict:
+def build_local_correction(content: str, brand_name: str, guidelines: dict, warning_msg: str | None = None) -> dict:
     replacements = {
         'guaranteed': 'designed to support',
         'instant': 'fast',
@@ -194,6 +196,8 @@ def build_local_correction(content: str, brand_name: str, guidelines: dict) -> d
             'description': 'The content was simplified and made more brand-safe without changing the original intent.'
         })
 
+    default_warning = 'Gemini AI is unavailable or rate-limited. This result uses local text substitutions, not an AI rewrite.'
+
     return {
         'corrected_content': corrected.strip() or content.strip(),
         'changes_made': changes,
@@ -205,7 +209,7 @@ def build_local_correction(content: str, brand_name: str, guidelines: dict) -> d
             }
         ],
         'engine': 'local',
-        'warning': 'Gemini is unavailable or not configured. This result uses local text substitutions, not an AI rewrite.',
+        'warning': warning_msg or default_warning,
     }
 
 
@@ -275,19 +279,10 @@ def is_valid_gemini_key(key: str | None) -> bool:
 async def run_ai_brand_analysis(content: str, brand_name: str, guidelines: dict) -> dict:
     api_key = settings.GOOGLE_API_KEY or ''
     if not is_valid_gemini_key(api_key):
-        return build_local_analysis(content, brand_name, guidelines)
+        return build_local_analysis(content, brand_name, guidelines, warning_msg='Gemini API key is not configured. Result generated using local governance rules.')
 
-    try:
-        genai.configure(api_key=api_key)
-
-        model_name = (settings.GEMINI_MODEL or 'gemini-3.5-flash').strip()
-        if not model_name:
-            model_name = 'gemini-3.5-flash'
-
-        model = genai.GenerativeModel(model_name)
-        guideline_context = build_guideline_context(guidelines)
-
-        prompt = """
+    guideline_context = build_guideline_context(guidelines)
+    prompt = """
 You are BRANDITHM AI Brand Governance Engine.
 Analyze the submitted marketing content against the brand guidelines below.
 
@@ -320,58 +315,73 @@ Rules:
 - Explain the underlying issue and provide actionable recommendations.
 - Keep the improved_content version aligned with the brand voice but do not rewrite the original content automatically.
 """.format(
-            brand_name=brand_name,
-            guideline_context=guideline_context,
-            content=content,
-        )
+        brand_name=brand_name,
+        guideline_context=guideline_context,
+        content=content,
+    )
 
-        response = await asyncio.to_thread(
-            model.generate_content,
-            prompt,
-            generation_config={
-                'temperature': 0.2,
-                'response_mime_type': 'application/json',
-                'max_output_tokens': 2048,
-            },
-        )
-        parsed = parse_ai_json_response(response.text)
+    models_to_try = [
+        (settings.GEMINI_MODEL or 'gemini-3.5-flash').strip(),
+        'gemini-3.8-flash',
+        'gemini-2.5-flash',
+    ]
 
-        tone_report = parsed.get('tone_analysis')
-        if not isinstance(tone_report, dict) or 'detected' not in tone_report:
-            tone_report = tone_service.analyze_tone_local(content, guidelines)
+    last_error = None
+    for model_name in models_to_try:
+        if not model_name:
+            continue
+        try:
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel(model_name)
+            response = await asyncio.to_thread(
+                model.generate_content,
+                prompt,
+                generation_config={
+                    'temperature': 0.2,
+                    'response_mime_type': 'application/json',
+                    'max_output_tokens': 2048,
+                },
+            )
+            parsed = parse_ai_json_response(response.text)
 
-        return {
-            'overall_score': int(parsed.get('overall_score', 0)),
-            'brand_compliance_score': int(parsed.get('brand_compliance_score', 0)),
-            'tone_consistency': int(parsed.get('tone_consistency', 0)),
-            'grammar_score': int(parsed.get('grammar_score', 0)),
-            'readability_score': int(parsed.get('readability_score', 0)),
-            'tone_analysis': tone_report,
-            'violations': parsed.get('violations') or [],
-            'critical_issues': parsed.get('critical_issues') or [],
-            'recommendations': parsed.get('recommendations') or [],
-            'summary': parsed.get('summary') or 'AI review completed successfully.',
-            'improved_content': parsed.get('improved_content') or content,
-            'engine': 'gemini',
-        }
-    except (google_exceptions.GoogleAPIError, ValueError, TypeError) as exc:
-        logger.warning('Gemini content analysis failed; using local rules: %s', exc)
-        return build_local_analysis(content, brand_name, guidelines)
+            tone_report = parsed.get('tone_analysis')
+            if not isinstance(tone_report, dict) or 'detected' not in tone_report:
+                tone_report = tone_service.analyze_tone_local(content, guidelines)
+
+            return {
+                'overall_score': int(parsed.get('overall_score', 0)),
+                'brand_compliance_score': int(parsed.get('brand_compliance_score', 0)),
+                'tone_consistency': int(parsed.get('tone_consistency', 0)),
+                'grammar_score': int(parsed.get('grammar_score', 0)),
+                'readability_score': int(parsed.get('readability_score', 0)),
+                'tone_analysis': tone_report,
+                'violations': parsed.get('violations') or [],
+                'critical_issues': parsed.get('critical_issues') or [],
+                'recommendations': parsed.get('recommendations') or [],
+                'summary': parsed.get('summary') or 'AI review completed successfully.',
+                'improved_content': parsed.get('improved_content') or content,
+                'engine': 'gemini',
+            }
+        except Exception as exc:
+            last_error = exc
+            logger.warning('Gemini model %s failed: %s', model_name, exc)
+            if '429' in str(exc) or 'quota' in str(exc).lower():
+                await asyncio.sleep(1.0)
+            continue
+
+    warning = 'Gemini AI rate limit or quota exceeded. Local governance rules were used for this check.'
+    if last_error and '404' in str(last_error):
+        warning = 'Gemini model is currently updating. Local governance rules were used for this check.'
+    return build_local_analysis(content, brand_name, guidelines, warning_msg=warning)
 
 
 async def run_ai_content_correction(content: str, brand_name: str, guidelines: dict) -> dict:
     api_key = settings.GOOGLE_API_KEY or ''
     if not is_valid_gemini_key(api_key):
-        return build_local_correction(content, brand_name, guidelines)
+        return build_local_correction(content, brand_name, guidelines, warning_msg='Gemini API key is not configured. Result generated using local substitutions.')
 
-    try:
-        genai.configure(api_key=api_key)
-
-        model_name = (settings.GEMINI_MODEL or 'gemini-3.5-flash').strip() or 'gemini-3.5-flash'
-        model = genai.GenerativeModel(model_name)
-        guideline_context = build_guideline_context(guidelines)
-
-        prompt = """
+    guideline_context = build_guideline_context(guidelines)
+    prompt = """
 You are BRANDITHM AI Copy Improvement Engine.
 Rewrite the original content to improve clarity, grammar, tone, readability, and brand alignment while preserving the original meaning.
 
@@ -398,32 +408,51 @@ Rules:
 - Improve brand tone and readability while preserving meaning.
 - Keep the rewrite clear, concise, and enterprise-ready.
 """.format(
-            brand_name=brand_name,
-            guideline_context=guideline_context,
-            content=content,
-        )
+        brand_name=brand_name,
+        guideline_context=guideline_context,
+        content=content,
+    )
 
-        response = await asyncio.to_thread(
-            model.generate_content,
-            prompt,
-            generation_config={
-                'temperature': 0.25,
-                'response_mime_type': 'application/json',
-                'max_output_tokens': 2048,
-            },
-        )
-        parsed = parse_ai_json_response(response.text)
+    models_to_try = [
+        (settings.GEMINI_MODEL or 'gemini-3.5-flash').strip(),
+        'gemini-3.8-flash',
+        'gemini-2.5-flash',
+    ]
 
-        return {
-            'corrected_content': parsed.get('corrected_content') or content,
-            'changes_made': parsed.get('changes_made') or [],
-            'summary': parsed.get('summary') or 'Content was refined to match brand voice and clarity standards.',
-            'improvements': parsed.get('improvements') or [],
-            'engine': 'gemini',
-        }
-    except (google_exceptions.GoogleAPIError, ValueError, TypeError) as exc:
-        logger.warning('Gemini content correction failed; using local substitutions: %s', exc)
-        return build_local_correction(content, brand_name, guidelines)
+    last_error = None
+    for model_name in models_to_try:
+        if not model_name:
+            continue
+        try:
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel(model_name)
+            response = await asyncio.to_thread(
+                model.generate_content,
+                prompt,
+                generation_config={
+                    'temperature': 0.25,
+                    'response_mime_type': 'application/json',
+                    'max_output_tokens': 2048,
+                },
+            )
+            parsed = parse_ai_json_response(response.text)
+
+            return {
+                'corrected_content': parsed.get('corrected_content') or content,
+                'changes_made': parsed.get('changes_made') or [],
+                'summary': parsed.get('summary') or 'Content was refined to match brand voice and clarity standards.',
+                'improvements': parsed.get('improvements') or [],
+                'engine': 'gemini',
+            }
+        except Exception as exc:
+            last_error = exc
+            logger.warning('Gemini correction model %s failed: %s', model_name, exc)
+            if '429' in str(exc) or 'quota' in str(exc).lower():
+                await asyncio.sleep(1.0)
+            continue
+
+    warning = 'Gemini AI rate limit or quota exceeded. Local text substitutions were applied.'
+    return build_local_correction(content, brand_name, guidelines, warning_msg=warning)
 
 
 @router.post('/brand-guidelines')
