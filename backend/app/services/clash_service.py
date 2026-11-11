@@ -13,10 +13,11 @@ def fuzzy_similarity(a: str, b: str) -> float:
 def check_competitor_clashes(content: str, competitors: list[dict], threshold: float = 0.65) -> dict:
     if not content or not competitors:
         return {
+            'checked': False,
             'has_clashes': False,
             'risk_level': 'none',
             'clashes': [],
-            'summary': 'No competitor IP conflicts detected.',
+            'summary': 'No competitor profiles are registered; a clash check was not performed.',
         }
 
     clashes = []
@@ -155,9 +156,9 @@ def check_competitor_clashes(content: str, competitors: list[dict], threshold: f
         summary = f"Low competitor clash risk: {len(deduped_clashes)} minor keyword overlap(s) noted."
 
     return {
+        'checked': True,
         'has_clashes': has_clashes,
         'risk_level': risk_level,
         'clashes': deduped_clashes,
         'summary': summary,
     }
-

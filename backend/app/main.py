@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routes import auth, brand, competitors, content, health, leaderboard, visual
+from app.routes import auth, brand, competitors, content, health, leaderboard, social, visual
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -27,6 +27,7 @@ app.include_router(content.router, prefix='/api')
 app.include_router(competitors.router, prefix='/api')
 app.include_router(leaderboard.router, prefix='/api')
 app.include_router(visual.router, prefix='/api')
+app.include_router(social.router, prefix='/api')
 
 
 @app.get('/')

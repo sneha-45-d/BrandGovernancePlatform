@@ -1,23 +1,11 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.database import local_store
+from app.security import get_authenticated_user, verify_user_scope
 from app.services.clash_service import check_competitor_clashes
 
 router = APIRouter()
-
-DEFAULT_SAMPLE_COMPETITORS = [
-    {
-        'name': 'NovaBrand AI',
-        'slogans': ['Instant brand compliance in seconds', 'The best AI copy guaranteed'],
-        'keywords': ['novaguard', 'hyperbrand', 'instant-audit'],
-    },
-    {
-        'name': 'ApexGovernance',
-        'slogans': ['Unbreakable enterprise trust', 'Guaranteed zero violations'],
-        'keywords': ['apextrust', 'brandlock', 'zero-risk'],
-    },
-]
 
 
 class CompetitorInput(BaseModel):
@@ -34,24 +22,23 @@ class ClashCheckInput(BaseModel):
 
 
 @router.get('/competitors')
-def get_user_competitors(user_id: str = Query(...)):
+def get_user_competitors(
+    user_id: str = Query(...),
+    current_user: dict = Depends(get_authenticated_user),
+):
+    user_id = verify_user_scope(current_user, user_id)
     items = local_store.get_competitors(user_id)
-    if not items:
-        for sample in DEFAULT_SAMPLE_COMPETITORS:
-            local_store.add_competitor(
-                user_id=user_id,
-                name=sample['name'],
-                slogans=sample['slogans'],
-                keywords=sample['keywords'],
-            )
-        items = local_store.get_competitors(user_id)
     return {'competitors': items, 'count': len(items)}
 
 
 @router.post('/competitors')
-def add_competitor(payload: CompetitorInput):
+def add_competitor(
+    payload: CompetitorInput,
+    current_user: dict = Depends(get_authenticated_user),
+):
+    user_id = verify_user_scope(current_user, payload.user_id)
     item = local_store.add_competitor(
-        user_id=payload.user_id,
+        user_id=user_id,
         name=payload.name,
         slogans=[s.strip() for s in payload.slogans if s.strip()],
         keywords=[k.strip() for k in payload.keywords if k.strip()],
@@ -60,10 +47,15 @@ def add_competitor(payload: CompetitorInput):
 
 
 @router.put('/competitors/{competitor_id}')
-def update_competitor(competitor_id: str, payload: CompetitorInput):
+def update_competitor(
+    competitor_id: str,
+    payload: CompetitorInput,
+    current_user: dict = Depends(get_authenticated_user),
+):
+    user_id = verify_user_scope(current_user, payload.user_id)
     updated = local_store.update_competitor(
         competitor_id=competitor_id,
-        user_id=payload.user_id,
+        user_id=user_id,
         name=payload.name,
         slogans=[s.strip() for s in payload.slogans if s.strip()],
         keywords=[k.strip() for k in payload.keywords if k.strip()],
@@ -74,7 +66,12 @@ def update_competitor(competitor_id: str, payload: CompetitorInput):
 
 
 @router.delete('/competitors/{competitor_id}')
-def delete_competitor(competitor_id: str, user_id: str = Query(...)):
+def delete_competitor(
+    competitor_id: str,
+    user_id: str = Query(...),
+    current_user: dict = Depends(get_authenticated_user),
+):
+    user_id = verify_user_scope(current_user, user_id)
     deleted = local_store.delete_competitor(competitor_id, user_id)
     if not deleted:
         raise HTTPException(status_code=404, detail='Competitor profile not found.')
@@ -82,17 +79,11 @@ def delete_competitor(competitor_id: str, user_id: str = Query(...)):
 
 
 @router.post('/competitors/check-clash')
-def check_clash(payload: ClashCheckInput):
-    competitors = local_store.get_competitors(payload.user_id)
-    if not competitors:
-        for sample in DEFAULT_SAMPLE_COMPETITORS:
-            local_store.add_competitor(
-                user_id=payload.user_id,
-                name=sample['name'],
-                slogans=sample['slogans'],
-                keywords=sample['keywords'],
-            )
-        competitors = local_store.get_competitors(payload.user_id)
+def check_clash(
+    payload: ClashCheckInput,
+    current_user: dict = Depends(get_authenticated_user),
+):
+    user_id = verify_user_scope(current_user, payload.user_id)
+    competitors = local_store.get_competitors(user_id)
     result = check_competitor_clashes(payload.text, competitors, threshold=payload.threshold)
     return result
-

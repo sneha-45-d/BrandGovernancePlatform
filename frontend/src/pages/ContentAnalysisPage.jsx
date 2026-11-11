@@ -35,6 +35,8 @@ const scoreCards = [
   { key: 'grammar_score', label: 'Grammar', icon: FileText },
   { key: 'readability_score', label: 'Readability', icon: Wand2 },
 ]
+const maxUploadBytes = 25 * 1024 * 1024
+const supportedUploadTypes = '.pdf,.docx,.pptx,.txt,.md,.png,.jpg,.jpeg,.webp,.gif,.bmp,.mp3,.wav,.m4a,.aac,.ogg,.flac,.mp4,.mov,.webm,.mpeg,.mpg,.avi,.wmv,.flv,.3gp'
 
 function formatScore(value) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) return '0%'
@@ -390,14 +392,27 @@ export default function ContentAnalysisPage() {
                   <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4">
                     <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-emerald-200 hover:text-emerald-700">
                       <Upload className="h-4 w-4" />
-                      <span>{selectedFile ? selectedFile.name : 'Upload PDF or DOCX'}</span>
+                      <span>{selectedFile ? selectedFile.name : 'Upload content or media'}</span>
                       <input
                         type="file"
-                        accept=".pdf,.docx,.txt,.md"
+                        accept={supportedUploadTypes}
                         className="hidden"
-                        onChange={(event) => setSelectedFile(event.target.files?.[0] || null)}
+                        onChange={(event) => {
+                          const nextFile = event.target.files?.[0] || null
+                          if (nextFile?.size > maxUploadBytes) {
+                            setSelectedFile(null)
+                            setError('Uploads are limited to 25 MB.')
+                            event.target.value = ''
+                            return
+                          }
+                          setSelectedFile(nextFile)
+                          setError('')
+                        }}
                       />
                     </label>
+                    <p className="mt-2 text-center text-xs text-slate-500">
+                      PDF, DOCX, PPTX, text, images, audio, or video · up to 25 MB. Gemini is required for media and slide-image analysis.
+                    </p>
                   </div>
 
                   {error && (

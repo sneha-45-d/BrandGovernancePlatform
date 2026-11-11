@@ -6,6 +6,7 @@ backend/data/*.sqlite3
 backend/data/*.sqlite3-shm
 backend/data/*.sqlite3-wal
 frontend/.env
+.env
 frontend/dist/
 backend/__pycache__/
 *.pyc

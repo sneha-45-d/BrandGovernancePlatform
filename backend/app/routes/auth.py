@@ -10,6 +10,7 @@ from pymongo.errors import DuplicateKeyError, PyMongoError
 
 from app.database import local_store
 from app.database.mongo import get_db
+from app.security import require_user
 
 router = APIRouter()
 users_collection = get_db()['users']
@@ -78,48 +79,6 @@ def create_session(user_id: ObjectId) -> str:
         'created_at': datetime.now(timezone.utc),
     })
     return token
-
-
-def require_user(authorization: str | None) -> tuple[dict, str]:
-    if not authorization or not authorization.startswith('Bearer '):
-        raise HTTPException(status_code=401, detail='Please sign in to continue.')
-
-    token = authorization.removeprefix('Bearer ').strip()
-    if not token:
-        raise HTTPException(status_code=401, detail='Please sign in to continue.')
-
-    token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
-    if token.startswith('serverlocal_'):
-        try:
-            user = local_store.get_session_user(token_hash)
-        except sqlite3.Error as exc:
-            raise HTTPException(status_code=503, detail='Local account storage is temporarily unavailable.') from exc
-        if not user:
-            raise HTTPException(status_code=401, detail='Your session has expired. Please sign in again.')
-        return user, token_hash
-
-    try:
-        session = sessions_collection.find_one({
-            'token_hash': token_hash,
-            'expires_at': {'$gt': datetime.now(timezone.utc)},
-        })
-        if session:
-            user = users_collection.find_one({'_id': session['user_id']})
-            if user:
-                return user, token_hash
-        # Fallback to local store session if not found in Mongo
-        local_user = local_store.get_session_user(token_hash)
-        if local_user:
-            return local_user, token_hash
-        raise HTTPException(status_code=401, detail='Your session has expired. Please sign in again.')
-    except PyMongoError:
-        try:
-            user = local_store.get_session_user(token_hash)
-        except sqlite3.Error as exc:
-            raise HTTPException(status_code=503, detail='Account storage is temporarily unavailable.') from exc
-        if not user:
-            raise HTTPException(status_code=401, detail='Your session has expired. Please sign in again.')
-        return user, token_hash
 
 
 @router.post('/auth/register')

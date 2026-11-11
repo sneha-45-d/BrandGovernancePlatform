@@ -3,20 +3,33 @@ import { Link } from 'react-router-dom'
 
 export default function ClashAlert({ clashReport }) {
   if (!clashReport || !clashReport.has_clashes) {
+    const checked = Boolean(clashReport) && clashReport.checked !== false
     return (
-      <div className="flex items-center justify-between rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 text-emerald-900 shadow-sm">
+      <div className={`flex items-center justify-between rounded-2xl border p-4 shadow-sm ${
+        checked
+          ? 'border-emerald-200 bg-emerald-50/80 text-emerald-900'
+          : 'border-amber-200 bg-amber-50/80 text-amber-950'
+      }`}>
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
-            <ShieldCheck className="h-5 w-5" />
+          <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${
+            checked ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'
+          }`}>
+            {checked ? <ShieldCheck className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />}
           </div>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">Competitor IP Guard</p>
-            <p className="text-sm font-medium">No trademark, slogan, or positioning clashes detected against registered competitors.</p>
+            <p className={`text-xs font-semibold uppercase tracking-wider ${checked ? 'text-emerald-700' : 'text-amber-800'}`}>
+              Competitor IP Guard
+            </p>
+            <p className="text-sm font-medium">
+              {clashReport?.summary || 'No competitor check has been run.'}
+            </p>
           </div>
         </div>
         <Link
           to="/competitors"
-          className="inline-flex items-center gap-1 rounded-xl bg-white px-3 py-1.5 text-xs font-semibold text-emerald-800 shadow-sm transition hover:bg-emerald-100"
+          className={`inline-flex items-center gap-1 rounded-xl bg-white px-3 py-1.5 text-xs font-semibold shadow-sm transition ${
+            checked ? 'text-emerald-800 hover:bg-emerald-100' : 'text-amber-900 hover:bg-amber-100'
+          }`}
         >
           Manage Registry <ChevronRight className="h-3.5 w-3.5" />
         </Link>
@@ -106,4 +119,3 @@ export default function ClashAlert({ clashReport }) {
     </div>
   )
 }
-

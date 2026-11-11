@@ -1,7 +1,8 @@
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 
 from app.database import local_store
+from app.security import get_authenticated_user, verify_user_scope
 from app.services.visual_service import analyze_image_compliance
 
 router = APIRouter()
@@ -19,13 +20,21 @@ class VisualGuidelinesInput(BaseModel):
 
 
 @router.get('/visual/guidelines')
-def get_visual_guidelines(user_id: str = Query(...)):
+def get_visual_guidelines(
+    user_id: str = Query(...),
+    current_user: dict = Depends(get_authenticated_user),
+):
+    user_id = verify_user_scope(current_user, user_id)
     return local_store.get_visual_guidelines(user_id)
 
 
 @router.post('/visual/guidelines')
-def save_visual_guidelines(payload: VisualGuidelinesInput):
-    saved = local_store.save_visual_guidelines(payload.user_id, payload.model_dump())
+def save_visual_guidelines(
+    payload: VisualGuidelinesInput,
+    current_user: dict = Depends(get_authenticated_user),
+):
+    user_id = verify_user_scope(current_user, payload.user_id)
+    saved = local_store.save_visual_guidelines(user_id, payload.model_dump())
     return {
         'message': 'Visual brand guidelines saved successfully.',
         'guidelines': saved,
@@ -36,7 +45,9 @@ def save_visual_guidelines(payload: VisualGuidelinesInput):
 async def check_visual_compliance(
     file: UploadFile = File(...),
     user_id: str = Form(...),
+    current_user: dict = Depends(get_authenticated_user),
 ):
+    user_id = verify_user_scope(current_user, user_id)
     if not file.filename:
         raise HTTPException(status_code=400, detail='No image file uploaded.')
 
@@ -54,4 +65,3 @@ async def check_visual_compliance(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f'Error analyzing image asset: {exc}') from exc
-

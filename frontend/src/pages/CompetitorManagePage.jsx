@@ -29,7 +29,6 @@ export default function CompetitorManagePage() {
   const [statusMsg, setStatusMsg] = useState('')
   const [saving, setSaving] = useState(false)
 
-  // Simulation clash test
   const [simText, setSimText] = useState('')
   const [simLoading, setSimLoading] = useState(false)
   const [simResult, setSimResult] = useState(null)
@@ -177,10 +176,10 @@ export default function CompetitorManagePage() {
             <div className="surface-panel rounded-[2rem] p-6 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
               <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
                 <ShieldAlert className="h-4 w-4 text-emerald-600" />
-                <span>Instant Slogan & Keyword Clash Simulator</span>
+                <span>Check copy against registered competitors</span>
               </div>
               <p className="mt-1 text-xs text-slate-500">
-                Test any marketing slogan or headline against your registered competitors in real time.
+                Check a draft headline or tagline against competitor profiles you have registered.
               </p>
 
               <div className="mt-4 flex flex-col gap-3 sm:flex-row">
@@ -197,7 +196,7 @@ export default function CompetitorManagePage() {
                   disabled={simLoading || !simText.trim()}
                   className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
                 >
-                  {simLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Scan Clash'}
+                  {simLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : '                  Check for clashes'}
                 </button>
               </div>
 
@@ -206,6 +205,10 @@ export default function CompetitorManagePage() {
                   <div className="flex items-center gap-2 font-bold">
                     {simResult.has_clashes ? (
                       <span className="text-red-700 flex items-center gap-1">
+                        <AlertTriangle className="h-4 w-4" /> {simResult.summary}
+                      </span>
+                    ) : simResult.checked === false ? (
+                      <span className="text-amber-800 flex items-center gap-1">
                         <AlertTriangle className="h-4 w-4" /> {simResult.summary}
                       </span>
                     ) : (
@@ -409,4 +412,3 @@ export default function CompetitorManagePage() {
     </div>
   )
 }
-

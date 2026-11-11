@@ -1,13 +1,17 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
 from app.database import local_store
+from app.security import get_authenticated_user, verify_user_scope
 from app.services.scoring_service import BADGE_CATALOG
 
 router = APIRouter()
 
 
 @router.get('/leaderboard')
-def get_leaderboard(limit: int = Query(10, ge=1, le=50)):
+def get_leaderboard(
+    limit: int = Query(10, ge=1, le=50),
+    _current_user: dict = Depends(get_authenticated_user),
+):
     items = local_store.get_leaderboard(limit=limit)
     return {
         'leaderboard': items,
@@ -17,7 +21,11 @@ def get_leaderboard(limit: int = Query(10, ge=1, le=50)):
 
 
 @router.get('/leaderboard/me')
-def get_my_champion_stats(user_id: str = Query(...)):
+def get_my_champion_stats(
+    user_id: str = Query(...),
+    current_user: dict = Depends(get_authenticated_user),
+):
+    user_id = verify_user_scope(current_user, user_id)
     stats = local_store.get_user_champion_stats(user_id)
     all_users = local_store.get_leaderboard(limit=100)
 
@@ -67,4 +75,3 @@ def get_my_champion_stats(user_id: str = Query(...)):
         'badges': stats.get('badges') or [],
         'badges_detailed': badges_detailed,
     }
-

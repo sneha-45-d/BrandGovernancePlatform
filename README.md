@@ -20,7 +20,8 @@ Brandithm is a brand governance platform for reviewing written content against a
 - Sign up, sign in, account settings, and sign out.
 - Dashboard and Brand Intelligence views for reviewing recent activity and brand health.
 - Editable Brand Guidelines shared with content analysis and AI correction.
-- Content analysis with scores, detected issues, recommendations, and review history.
+- Content analysis for text, PDF, DOCX, PPTX, images, audio, and video, with scores, detected issues, recommendations, and review history. Image/audio/video and presentation slide-image analysis require a configured Gemini API key.
+- Social Media Intelligence with per-account monitoring terms, provenance-labeled mention records, Gemini sentiment analysis, competitor profiles, evidence-based alerts, and provider connection status.
 - AI-assisted content correction.
 - Review Queue actions to approve a report or request revisions.
 - Light and dark themes.
@@ -49,7 +50,15 @@ pip install -r requirements.txt
 Copy-Item .env.example .env
 ```
 
-Edit `backend/.env` and set at least a secure `JWT_SECRET_KEY`. Configure `MONGO_URI` if you want to use MongoDB, and `GOOGLE_API_KEY` if you want Gemini-powered analysis and correction. See [Configuration](#configuration) for details.
+Open `C:\Users\vishu\BrandGovernancePlatform\backend\.env` and replace the placeholder on the `GEMINI_API_KEY` line with your own key, for example `GEMINI_API_KEY=your_actual_key`. Do not send the key in chat or commit this ignored file. The backend reads the key; it is never sent to the frontend. Without it, Gemini sentiment and reply-draft requests show a configuration error instead of returning fabricated AI output.
+
+Social OAuth credentials may be added to `backend\.env` using the provider placeholders. Generate an encryption key in the backend environment with `.\.venv\Scripts\python.exe -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` and set it as `SOCIAL_OAUTH_ENCRYPTION_KEY`. Register each callback URL from `backend\.env.example` in the matching provider developer console. Account linking uses OAuth and encrypts stored access/refresh tokens. Linking an account alone does not grant access to public posts or enable monitoring; posts still require separate provider API permissions and ingestion support. Reply suggestions are drafts only and are never published.
+
+### Social Intelligence verification
+
+From `backend`, run `.\.venv\Scripts\python.exe -m unittest discover -s tests -v`. Authenticated social endpoints use `/api/social/overview`, `/api/social/config`, `/api/social/mentions`, `/api/social/competitors`, `/api/social/alerts`, and `/api/social/integrations`. All persisted records are user-scoped. The overview computes counts from stored mentions only; no demo social posts or analytics are seeded.
+
+Edit `backend/.env` and set at least a secure `JWT_SECRET_KEY`. Configure `MONGO_URI` if you want to use MongoDB, and `GEMINI_API_KEY` if you want Gemini-powered analysis and correction. See [Configuration](#configuration) for details.
 
 Start the API from the `backend` directory:
 
@@ -171,7 +180,10 @@ Docker Compose persists Chroma data in the `chroma_data` named volume and the SQ
 ## API and checks
 
 - API health: `GET /api/health`
+- Account analytics: `GET /api/analytics?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD` (date range is inclusive and limited to 366 days)
+- Content analysis uploads accept supported documents and media up to 25 MB. Gemini-backed media analysis fails explicitly when the API key is missing or processing fails; it does not report a text-only fallback as a media result.
 - Interactive OpenAPI documentation: `http://localhost:8000/docs`
+- Feature APIs require a valid `Authorization: Bearer <token>` header from `/api/auth/login` or `/api/auth/register`. Data requests are scoped to the authenticated account; a supplied `user_id` must match that account.
 - Frontend lint: `cd frontend; npm run lint`
 - Frontend production build: `cd frontend; npm run build`
 - Backend syntax check: `cd backend; python -m compileall app`

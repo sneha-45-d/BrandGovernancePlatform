@@ -12,13 +12,7 @@ from app.config import settings
 SESSION_DURATION = timedelta(days=30)
 
 
-_db_initialized = False
-
-
 def _init_db(connection):
-    global _db_initialized
-    if _db_initialized:
-        return
     connection.executescript(
         '''
         CREATE TABLE IF NOT EXISTS users (
@@ -69,6 +63,95 @@ def _init_db(connection):
         CREATE INDEX IF NOT EXISTS competitors_user
             ON competitors (user_id);
 
+        CREATE TABLE IF NOT EXISTS social_monitoring_config (
+            user_id TEXT PRIMARY KEY,
+            brand_name TEXT NOT NULL DEFAULT '',
+            keywords TEXT NOT NULL DEFAULT '[]',
+            hashtags TEXT NOT NULL DEFAULT '[]',
+            product_names TEXT NOT NULL DEFAULT '[]',
+            enabled INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS social_mentions (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            entity_name TEXT NOT NULL,
+            entity_type TEXT NOT NULL DEFAULT 'brand',
+            platform TEXT NOT NULL,
+            author TEXT NOT NULL DEFAULT '',
+            content TEXT NOT NULL,
+            source_url TEXT NOT NULL DEFAULT '',
+            source_post_id TEXT,
+            published_at TEXT NOT NULL,
+            sentiment TEXT NOT NULL DEFAULT 'unanalysed',
+            sentiment_data TEXT NOT NULL DEFAULT '{}',
+            engagement TEXT NOT NULL DEFAULT '{}',
+            collection_source TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE (user_id, platform, source_post_id)
+        );
+        CREATE INDEX IF NOT EXISTS social_mentions_user_published
+            ON social_mentions (user_id, published_at DESC);
+        CREATE INDEX IF NOT EXISTS social_mentions_user_platform_sentiment
+            ON social_mentions (user_id, platform, sentiment);
+        CREATE TABLE IF NOT EXISTS social_reply_drafts (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            mention_id TEXT NOT NULL,
+            drafts TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS social_reply_drafts_user_mention
+            ON social_reply_drafts (user_id, mention_id, created_at DESC);
+        CREATE TABLE IF NOT EXISTS social_competitors (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            keywords TEXT NOT NULL DEFAULT '[]',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE (user_id, name)
+        );
+        CREATE INDEX IF NOT EXISTS social_competitors_user
+            ON social_competitors (user_id);
+        CREATE TABLE IF NOT EXISTS social_alerts (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            title TEXT NOT NULL,
+            severity TEXT NOT NULL,
+            description TEXT NOT NULL,
+            platform TEXT NOT NULL DEFAULT 'all',
+            recommended_action TEXT NOT NULL,
+            read INTEGER NOT NULL DEFAULT 0,
+            trigger_key TEXT NOT NULL,
+            detected_at TEXT NOT NULL,
+            UNIQUE (user_id, trigger_key)
+        );
+        CREATE INDEX IF NOT EXISTS social_alerts_user_detected
+            ON social_alerts (user_id, detected_at DESC);
+        CREATE TABLE IF NOT EXISTS social_accounts (
+            user_id TEXT NOT NULL,
+            platform TEXT NOT NULL,
+            account_name TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'disconnected',
+            scopes TEXT NOT NULL DEFAULT '[]',
+            access_token_encrypted TEXT NOT NULL DEFAULT '',
+            refresh_token_encrypted TEXT NOT NULL DEFAULT '',
+            token_expires_at TEXT,
+            connected_at TEXT,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (user_id, platform)
+        );
+        CREATE TABLE IF NOT EXISTS social_oauth_states (
+            state_hash TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            platform TEXT NOT NULL,
+            state_data TEXT NOT NULL DEFAULT '{}',
+            expires_at TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS visual_guidelines (
             user_id TEXT PRIMARY KEY,
             approved_colors TEXT NOT NULL,
@@ -93,7 +176,10 @@ def _init_db(connection):
             connection.execute(f'ALTER TABLE users ADD COLUMN {column} {col_type}')
         except sqlite3.OperationalError:
             pass
-    _db_initialized = True
+    try:
+        connection.execute('ALTER TABLE social_mentions ADD COLUMN entity_type TEXT')
+    except sqlite3.OperationalError:
+        pass
 
 
 @contextmanager
@@ -289,6 +375,25 @@ def list_analyses(user_id: str, status: str | None = None, search: str | None = 
             ]).lower()
         ]
     return results
+
+
+def list_analyses_between(user_id: str, start_at: str, end_before: str) -> list[dict]:
+    with _connect() as connection:
+        rows = connection.execute(
+            '''
+            SELECT id, user_id, brand_name, content_title, analysis, status, review_status, created_at
+            FROM content_analyses
+            WHERE user_id = ? AND created_at >= ? AND created_at < ?
+            ORDER BY created_at ASC
+            ''',
+            (user_id, start_at, end_before),
+        ).fetchall()
+    reports = []
+    for row in rows:
+        report = dict(row)
+        report['analysis'] = json.loads(report['analysis'])
+        reports.append(report)
+    return reports
 
 
 def delete_analysis(analysis_id: str, user_id: str):
@@ -584,4 +689,3 @@ def save_visual_guidelines(user_id: str, data: dict) -> dict:
             ),
         )
     return get_visual_guidelines(user_id)
-

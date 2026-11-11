@@ -1,14 +1,19 @@
 import {
   BarChart3,
+  BellRing,
   BookOpenText,
+  BrainCircuit,
+  Building2,
   FileText,
   Flame,
   Gauge,
   LayoutDashboard,
   LogOut,
   Menu,
+  MessageCircleMore,
   MessageSquareText,
   Palette,
+  Radio,
   Settings,
   ShieldCheck,
   Sparkles,
@@ -34,6 +39,18 @@ const items = [
   { label: 'Review Queue', icon: MessageSquareText, to: '/review-queue' },
   { label: 'AI Corrections', icon: Wand2, to: '/ai-correction' },
   { label: 'Analytics', icon: BarChart3, to: '/analytics' },
+  {
+    label: 'Social Media Intelligence',
+    icon: Radio,
+    to: '/social/overview',
+    children: [
+      { label: 'Overview', icon: LayoutDashboard, to: '/social/overview' },
+      { label: 'Brand Mentions', icon: MessageCircleMore, to: '/social/mentions' },
+      { label: 'Sentiment Analysis', icon: BrainCircuit, to: '/social/sentiment' },
+      { label: 'Competitor Intelligence', icon: Building2, to: '/social/competitors' },
+      { label: 'Intelligent Alerts', icon: BellRing, to: '/social/alerts' },
+    ],
+  },
   { label: 'Settings', icon: Settings, to: '/settings' },
 ]
 
@@ -98,24 +115,48 @@ export default function Sidebar({ score = null }) {
 
       <div id="sidebar-mobile-content" className={`sidebar-mobile-content ${isMobileMenuOpen ? 'is-open' : ''}`}>
         <nav className="grid grid-cols-2 gap-2 lg:block lg:space-y-2" aria-label="Workspace navigation">
-          {items.map(({ label, icon: Icon, to }) => {
-            const active = location.pathname === to
+          {items.map(({ label, icon: Icon, to, children }) => {
+            const active = location.pathname === to || Boolean(children?.some((child) => child.to === location.pathname))
 
             return (
-              <Link
-                key={label}
-                to={to}
-                aria-current={active ? 'page' : undefined}
-                onClick={() => setIsMobileMenuOpen(false)}
-                className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-medium transition ${
-                  active
-                    ? 'sidebar-nav-active bg-emerald-400/10 text-emerald-50 shadow-inner ring-1 ring-emerald-300/20'
-                    : 'text-slate-300 hover:bg-white/5 hover:text-white'
-                }`}
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                <span className="min-w-0 break-words">{label}</span>
-              </Link>
+              <div key={label} className={children ? 'col-span-2 lg:col-span-1' : ''}>
+                <Link
+                  to={to}
+                  aria-current={active ? 'page' : undefined}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-medium transition ${
+                    active
+                      ? 'sidebar-nav-active bg-emerald-400/10 text-emerald-50 shadow-inner ring-1 ring-emerald-300/20'
+                      : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                  }`}
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span className="min-w-0 break-words">{label}</span>
+                </Link>
+                {children && (
+                  <div className="ml-3 mt-1 space-y-1 border-l border-emerald-200/15 pl-3">
+                    {children.map(({ label: childLabel, icon: ChildIcon, to: childTo }) => {
+                      const childActive = location.pathname === childTo
+                      return (
+                        <Link
+                          key={childTo}
+                          to={childTo}
+                          aria-current={childActive ? 'page' : undefined}
+                          onClick={() => setIsMobileMenuOpen(false)}
+                          className={`flex items-center gap-2 rounded-xl px-2 py-2 text-xs font-medium transition ${
+                            childActive
+                              ? 'bg-emerald-400/10 text-emerald-50'
+                              : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                          }`}
+                        >
+                          <ChildIcon className="h-3.5 w-3.5 shrink-0" />
+                          <span>{childLabel}</span>
+                        </Link>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
             )
           })}
         </nav>

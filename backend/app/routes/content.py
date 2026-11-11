@@ -4,17 +4,11 @@ import logging
 import re
 import sqlite3
 from datetime import datetime, timezone
-from io import BytesIO
-from pathlib import Path
 from typing import Literal
-from zipfile import BadZipFile
 
-import fitz
 import google.generativeai as genai
 from bson import ObjectId
-from docx import Document
-from docx.opc.exceptions import PackageNotFoundError
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from google.api_core import exceptions as google_exceptions
 from pydantic import BaseModel, Field
 from pymongo.errors import PyMongoError
@@ -22,7 +16,17 @@ from pymongo.errors import PyMongoError
 from app.config import settings
 from app.database import local_store
 from app.database.mongo import get_db
+from app.security import get_authenticated_user, verify_user_scope
 from app.services import clash_service, scoring_service, tone_service
+from app.services.content_ingestion import (
+    MAX_UPLOAD_BYTES,
+    MediaFile,
+    ingest_content_file,
+)
+from app.services.multimodal_service import (
+    MultimodalAnalysisError,
+    generate_multimodal_content,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -213,37 +217,6 @@ def build_local_correction(content: str, brand_name: str, guidelines: dict, warn
     }
 
 
-def extract_text_from_file(file: UploadFile | None) -> str:
-    if file is None or not file.filename:
-        return ''
-
-    file_bytes = file.file.read()
-    suffix = Path(file.filename).suffix.lower()
-
-    if suffix == '.pdf':
-        try:
-            with fitz.open(stream=file_bytes, filetype='pdf') as document:
-                texts = [page.get_text() for page in document if page.get_text()]
-            return '\n\n'.join(texts).strip()
-        except fitz.FileDataError as exc:
-            raise HTTPException(status_code=400, detail='The uploaded PDF file could not be read.') from exc
-
-    if suffix == '.docx':
-        try:
-            document = Document(BytesIO(file_bytes))
-            return '\n'.join(paragraph.text.strip() for paragraph in document.paragraphs if paragraph.text.strip())
-        except (BadZipFile, PackageNotFoundError, ValueError, KeyError) as exc:
-            raise HTTPException(status_code=400, detail='The uploaded DOCX file could not be read.') from exc
-
-    if suffix in {'.txt', '.md'}:
-        try:
-            return file_bytes.decode('utf-8')
-        except UnicodeDecodeError:
-            return file_bytes.decode('latin-1', errors='ignore')
-
-    raise HTTPException(status_code=415, detail='Supported file types are PDF, DOCX, TXT, and MD.')
-
-
 def serialize_analysis_record(record: dict) -> dict | None:
     if not record:
         return None
@@ -276,10 +249,26 @@ def is_valid_gemini_key(key: str | None) -> bool:
     return True
 
 
-async def run_ai_brand_analysis(content: str, brand_name: str, guidelines: dict) -> dict:
+async def run_ai_brand_analysis(
+    content: str,
+    brand_name: str,
+    guidelines: dict,
+    media_files: list[MediaFile] | None = None,
+) -> dict:
+    media_files = media_files or []
     api_key = settings.GOOGLE_API_KEY or ''
     if not is_valid_gemini_key(api_key):
-        return build_local_analysis(content, brand_name, guidelines, warning_msg='Gemini API key is not configured. Result generated using local governance rules.')
+        if media_files:
+            raise HTTPException(
+                status_code=503,
+                detail='Configure a valid Gemini API key to analyze this media file.',
+            )
+        return build_local_analysis(
+            content,
+            brand_name,
+            guidelines,
+            warning_msg='Gemini API key is not configured. Result generated using local governance rules, not an AI model.',
+        )
 
     guideline_context = build_guideline_context(guidelines)
     prompt = """
@@ -313,6 +302,7 @@ Rules:
 - Score each metric between 0 and 100.
 - Identify real violations of tone, compliance, messaging, restricted words, or unsupported claims.
 - Explain the underlying issue and provide actionable recommendations.
+- For images, audio, video, and presentation slide images, base findings on the provided media. Do not infer unseen content.
 - Keep the improved_content version aligned with the brand voice but do not rewrite the original content automatically.
 """.format(
         brand_name=brand_name,
@@ -320,34 +310,35 @@ Rules:
         content=content,
     )
 
-    models_to_try = [
-        (settings.GEMINI_MODEL or 'gemini-3.5-flash').strip(),
-        'gemini-3.8-flash',
+    configured_model = (settings.GEMINI_MODEL or 'gemini-3.5-flash').strip()
+    models_to_try = list(dict.fromkeys([
+        configured_model,
+        'gemini-3.5-flash',
         'gemini-2.5-flash',
-    ]
+    ]))
 
     last_error = None
-    for model_name in models_to_try:
-        if not model_name:
-            continue
+    for model_name in filter(None, models_to_try):
         try:
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel(model_name)
-            response = await asyncio.to_thread(
-                model.generate_content,
-                prompt,
-                generation_config={
-                    'temperature': 0.2,
-                    'response_mime_type': 'application/json',
-                    'max_output_tokens': 2048,
-                },
-            )
-            parsed = parse_ai_json_response(response.text)
-
+            if media_files:
+                raw_response = await generate_multimodal_content(model_name, prompt, media_files)
+            else:
+                model = genai.GenerativeModel(model_name)
+                response = await asyncio.to_thread(
+                    model.generate_content,
+                    prompt,
+                    generation_config={
+                        'temperature': 0.2,
+                        'response_mime_type': 'application/json',
+                        'max_output_tokens': 2048,
+                    },
+                )
+                raw_response = response.text
+            parsed = parse_ai_json_response(raw_response)
             tone_report = parsed.get('tone_analysis')
             if not isinstance(tone_report, dict) or 'detected' not in tone_report:
                 tone_report = tone_service.analyze_tone_local(content, guidelines)
-
             return {
                 'overall_score': int(parsed.get('overall_score', 0)),
                 'brand_compliance_score': int(parsed.get('brand_compliance_score', 0)),
@@ -367,7 +358,13 @@ Rules:
             logger.warning('Gemini model %s failed: %s', model_name, exc)
             if '429' in str(exc) or 'quota' in str(exc).lower():
                 await asyncio.sleep(1.0)
-            continue
+
+    if media_files:
+        detail = 'Gemini could not complete the media analysis. No text-only fallback was used.'
+        if isinstance(last_error, MultimodalAnalysisError):
+            detail = f'{last_error} No text-only fallback was used.'
+        logger.error('Gemini media analysis failed', exc_info=last_error)
+        raise HTTPException(status_code=502, detail=detail) from last_error
 
     warning = 'Gemini AI rate limit or quota exceeded. Local governance rules were used for this check.'
     if last_error and '404' in str(last_error):
@@ -456,31 +453,36 @@ Rules:
 
 
 @router.post('/brand-guidelines')
-def save_brand_guidelines(payload: BrandGuidelinesInput):
+def save_brand_guidelines(
+    payload: BrandGuidelinesInput,
+    current_user: dict = Depends(get_authenticated_user),
+):
+    user_id = verify_user_scope(current_user, payload.user_id)
     record = payload.model_dump()
+    record['user_id'] = user_id
     record['updated_at'] = datetime.now(timezone.utc)
     record['created_at'] = record.get('created_at', record['updated_at'])
 
     try:
         guidelines_collection.update_one(
-            {'user_id': payload.user_id, 'brand_name': payload.brand_name},
+            {'user_id': user_id, 'brand_name': payload.brand_name},
             {'$set': record},
             upsert=True,
         )
         return {
             'message': 'Brand guidelines saved successfully.',
             'brand_name': payload.brand_name,
-            'user_id': payload.user_id,
+            'user_id': user_id,
             'storage': 'mongodb',
         }
     except PyMongoError:
         logger.warning('MongoDB unavailable; saving brand guidelines to local server storage')
         try:
-            local_store.save_guidelines(payload.model_dump())
+            local_store.save_guidelines(record)
             return {
                 'message': 'Brand guidelines saved to local server storage.',
                 'brand_name': payload.brand_name,
-                'user_id': payload.user_id,
+                'user_id': user_id,
                 'storage': 'server-local',
             }
         except sqlite3.Error as exc:
@@ -489,7 +491,11 @@ def save_brand_guidelines(payload: BrandGuidelinesInput):
 
 
 @router.get('/brand-guidelines')
-def get_brand_guidelines(user_id: str):
+def get_brand_guidelines(
+    user_id: str,
+    current_user: dict = Depends(get_authenticated_user),
+):
+    user_id = verify_user_scope(current_user, user_id)
     try:
         items = list(guidelines_collection.find({'user_id': user_id}).sort('updated_at', -1).limit(10))
     except PyMongoError:
@@ -513,7 +519,13 @@ def get_brand_guidelines(user_id: str):
 
 
 @router.get('/content/history')
-def get_content_history(user_id: str = Query(...), status: str | None = None, search: str | None = None):
+def get_content_history(
+    user_id: str = Query(...),
+    status: str | None = None,
+    search: str | None = None,
+    current_user: dict = Depends(get_authenticated_user),
+):
+    user_id = verify_user_scope(current_user, user_id)
     query = {'user_id': user_id}
     if status:
         query['status'] = status
@@ -605,7 +617,12 @@ def get_content_history(user_id: str = Query(...), status: str | None = None, se
 
 
 @router.get('/content/{analysis_id}')
-def get_content_report(analysis_id: str, user_id: str | None = Query(None)):
+def get_content_report(
+    analysis_id: str,
+    user_id: str | None = Query(None),
+    current_user: dict = Depends(get_authenticated_user),
+):
+    user_id = verify_user_scope(current_user, user_id)
     if analysis_id.startswith('serverlocal-'):
         try:
             record = local_store.get_analysis(analysis_id.removeprefix('serverlocal-'), user_id)
@@ -631,7 +648,12 @@ def get_content_report(analysis_id: str, user_id: str | None = Query(None)):
 
 
 @router.delete('/content/{analysis_id}')
-def delete_content_report(analysis_id: str, user_id: str = Query(...)):
+def delete_content_report(
+    analysis_id: str,
+    user_id: str = Query(...),
+    current_user: dict = Depends(get_authenticated_user),
+):
+    user_id = verify_user_scope(current_user, user_id)
     if analysis_id.startswith('serverlocal-'):
         try:
             deleted = local_store.delete_analysis(analysis_id.removeprefix('serverlocal-'), user_id)
@@ -660,7 +682,9 @@ def update_review_status(
     analysis_id: str,
     payload: ReviewStatusInput,
     user_id: str = Query(...),
+    current_user: dict = Depends(get_authenticated_user),
 ):
+    user_id = verify_user_scope(current_user, user_id)
     if analysis_id.startswith('serverlocal-'):
         try:
             updated = local_store.update_analysis_review_status(
@@ -699,26 +723,46 @@ def update_review_status(
 @router.post('/content/analyze')
 async def analyze_content(
     content: str = Form(''),
-    user_id: str = Form('demo-user'),
+    user_id: str | None = Form(None),
     brand_name: str = Form('BRANDITHM'),
     content_title: str = Form(''),
     guidelines: str = Form('{}'),
     file: UploadFile | None = File(None),
+    current_user: dict = Depends(get_authenticated_user),
 ):
+    user_id = verify_user_scope(current_user, user_id)
     guideline_payload = {}
     if guidelines:
         try:
             guideline_payload = json.loads(guidelines)
         except json.JSONDecodeError:
             guideline_payload = {}
+    guideline_payload['user_id'] = user_id
 
-    file_text = extract_text_from_file(file)
+    ingested_file = None
+    if file is not None:
+        if not file.filename:
+            raise HTTPException(status_code=400, detail='The uploaded file must have a filename.')
+        file_bytes = await file.read(MAX_UPLOAD_BYTES + 1)
+        if len(file_bytes) > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail='The uploaded file exceeds the 25 MB limit.')
+        ingested_file = ingest_content_file(file.filename, file_bytes)
+
     cleaned_content = (content or '').strip()
-    if file_text:
-        cleaned_content = '\n\n'.join(filter(None, [cleaned_content, file_text]))
+    if ingested_file and ingested_file.extracted_text:
+        cleaned_content = '\n\n'.join(filter(None, [cleaned_content, ingested_file.extracted_text]))
 
-    if not cleaned_content:
+    if not cleaned_content and not ingested_file:
         raise HTTPException(status_code=400, detail='No content supplied. Add text or upload a file.')
+
+    if ingested_file and not cleaned_content and not ingested_file.media_files:
+        raise HTTPException(
+            status_code=422,
+            detail='The uploaded file contains no readable text or analyzable media.',
+        )
+
+    if not cleaned_content and ingested_file:
+        cleaned_content = f'Uploaded {ingested_file.content_type} asset for brand review.'
 
     if not guideline_payload:
         guideline_payload = {
@@ -733,34 +777,46 @@ async def analyze_content(
             'brand_communication_rules': 'Avoid exaggerated claims, hype, and vague language. Keep claims precise and evidence-based.'
         }
 
-    analysis = await run_ai_brand_analysis(cleaned_content, brand_name, guideline_payload)
+    media_files = []
+    if ingested_file:
+        if ingested_file.requires_multimodal_ai and not is_valid_gemini_key(settings.GOOGLE_API_KEY):
+            raise HTTPException(
+                status_code=503,
+                detail='Configure a valid Gemini API key to analyze this media file.',
+            )
+        if is_valid_gemini_key(settings.GOOGLE_API_KEY):
+            media_files = ingested_file.media_files
+
+    analysis = await run_ai_brand_analysis(
+        cleaned_content,
+        brand_name,
+        guideline_payload,
+        media_files=media_files,
+    )
+    analysis['source_type'] = ingested_file.content_type if ingested_file else 'text'
 
     # Competitor IP & Clash Detection check
     try:
         competitors = local_store.get_competitors(user_id)
-        if not competitors:
-            from app.routes.competitors import DEFAULT_SAMPLE_COMPETITORS
-            for sample in DEFAULT_SAMPLE_COMPETITORS:
-                local_store.add_competitor(
-                    user_id=user_id,
-                    name=sample['name'],
-                    slogans=sample['slogans'],
-                    keywords=sample['keywords'],
-                )
-            competitors = local_store.get_competitors(user_id)
         clash_report = clash_service.check_competitor_clashes(cleaned_content, competitors)
-    except Exception as exc:
-        logger.warning('Competitor clash check failed: %s', exc)
-        clash_report = {'has_clashes': False, 'risk_level': 'none', 'clashes': [], 'summary': 'Clash scan skipped.'}
+    except Exception:
+        logger.exception('Competitor clash check failed')
+        clash_report = {
+            'checked': False,
+            'has_clashes': False,
+            'risk_level': 'none',
+            'clashes': [],
+            'summary': 'The competitor check could not be completed.',
+        }
 
     analysis['clash_report'] = clash_report
 
     # Gamified Champion Scoring update
     try:
         champion_update = scoring_service.process_analysis_score(user_id, analysis)
-    except Exception as exc:
-        logger.warning('Champion scoring update failed: %s', exc)
-        champion_update = {'points_earned': 10, 'champion_score': 10, 'streak_days': 1, 'badges': [], 'new_badges': []}
+    except Exception:
+        logger.exception('Champion scoring update failed')
+        champion_update = None
 
     record = {
         'user_id': user_id,
@@ -797,6 +853,7 @@ async def analyze_content(
         'champion_update': champion_update,
         'report_id': str(record.get('_id')) if record.get('_id') else None,
         'file_name': file.filename if file else None,
+        'content_type': ingested_file.content_type if ingested_file else 'text',
         'storage': storage if record.get('_id') else 'none',
     }
 
@@ -809,10 +866,12 @@ async def analyze_content(
 @router.post('/content/correct')
 async def correct_content(
     content: str = Form(''),
-    user_id: str = Form('demo-user'),
+    user_id: str | None = Form(None),
     brand_name: str = Form('BRANDITHM'),
     guidelines: str = Form('{}'),
+    current_user: dict = Depends(get_authenticated_user),
 ):
+    user_id = verify_user_scope(current_user, user_id)
     if not content or not content.strip():
         raise HTTPException(status_code=400, detail='No content supplied for AI correction.')
 
@@ -822,6 +881,7 @@ async def correct_content(
             guideline_payload = json.loads(guidelines)
         except json.JSONDecodeError:
             guideline_payload = {}
+    guideline_payload['user_id'] = user_id
 
     if not guideline_payload:
         guideline_payload = {
