@@ -731,7 +731,7 @@ def list_social_accounts(user_id):
             return None
         token_expiry = account.get('token_expires_at')
         status = account.get('status') or 'disconnected'
-        if token_expiry and not account.get('refresh_token_encrypted'):
+        if token_expiry:
             try:
                 expiry = datetime.fromisoformat(str(token_expiry).replace('Z', '+00:00'))
                 if expiry.tzinfo is None:
@@ -763,88 +763,6 @@ def list_social_accounts(user_id):
                 (user_id,),
             ).fetchall()
         return [sanitize(dict(row)) for row in rows]
-
-    return _try_mongo(mongo, local)
-
-
-def get_social_account_credentials(user_id, platform):
-    def mongo():
-        return _clean_document(get_db()['social_accounts'].find_one(
-            {'user_id': user_id, 'platform': platform},
-            {'_id': 0},
-        ))
-
-    def local():
-        with local_store._connect() as connection:
-            row = connection.execute(
-                'SELECT * FROM social_accounts WHERE user_id = ? AND platform = ?',
-                (user_id, platform),
-            ).fetchone()
-        return _clean_document(dict(row)) if row else None
-
-    return _try_mongo(mongo, local)
-
-
-def update_social_account_tokens(
-    user_id,
-    platform,
-    access_token_encrypted,
-    refresh_token_encrypted,
-    token_expires_at,
-):
-    now = _now()
-
-    def mongo():
-        result = get_db()['social_accounts'].update_one(
-            {'user_id': user_id, 'platform': platform},
-            {'$set': {
-                'access_token_encrypted': access_token_encrypted,
-                'refresh_token_encrypted': refresh_token_encrypted or '',
-                'token_expires_at': token_expires_at,
-                'status': 'connected',
-                'updated_at': now,
-            }},
-        )
-        return result.matched_count > 0
-
-    def local():
-        with local_store._connect() as connection:
-            result = connection.execute(
-                '''UPDATE social_accounts
-                   SET access_token_encrypted = ?, refresh_token_encrypted = ?,
-                       token_expires_at = ?, status = 'connected', updated_at = ?
-                   WHERE user_id = ? AND platform = ?''',
-                (
-                    access_token_encrypted,
-                    refresh_token_encrypted or '',
-                    token_expires_at,
-                    now,
-                    user_id,
-                    platform,
-                ),
-            )
-        return result.rowcount > 0
-
-    return _try_mongo(mongo, local)
-
-
-def update_social_account_status(user_id, platform, status):
-    now = _now()
-
-    def mongo():
-        result = get_db()['social_accounts'].update_one(
-            {'user_id': user_id, 'platform': platform},
-            {'$set': {'status': status, 'updated_at': now}},
-        )
-        return result.matched_count > 0
-
-    def local():
-        with local_store._connect() as connection:
-            result = connection.execute(
-                'UPDATE social_accounts SET status = ?, updated_at = ? WHERE user_id = ? AND platform = ?',
-                (status, now, user_id, platform),
-            )
-        return result.rowcount > 0
 
     return _try_mongo(mongo, local)
 

@@ -224,7 +224,7 @@ class SocialIntelligenceTests(unittest.TestCase):
         self.assertTrue(stored['state_data']['code_verifier'])
         self.assertIsNone(social_store.consume_oauth_state(state_hash))
 
-    def test_connection_status_keeps_expired_refreshable_tokens_connected(self):
+    def test_connection_status_never_exposes_tokens_and_flags_expiry(self):
         self._save_config()
         key = Fernet.generate_key()
         social_store.save_social_account(
@@ -237,29 +237,9 @@ class SocialIntelligenceTests(unittest.TestCase):
             (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat(),
         )
         account = social_store.list_social_accounts(self.user_id)[0]
-        self.assertEqual(account['status'], 'connected')
+        self.assertEqual(account['status'], 'reauth_required')
         self.assertNotIn('access_token_encrypted', account)
         self.assertNotIn('refresh_token_encrypted', account)
-
-    def test_instagram_setup_lists_missing_environment_names_without_values(self):
-        provider_settings = {
-            platform: {'client_id': 'configured-id', 'client_secret': 'configured-secret', 'redirect_uri': 'http://localhost/callback'}
-            for platform in ('instagram', 'facebook', 'youtube', 'x', 'linkedin')
-        }
-        provider_settings['instagram'] = {
-            'client_id': '',
-            'client_secret': '',
-            'redirect_uri': 'http://localhost/callback',
-        }
-        with patch.object(settings, 'SOCIAL_PROVIDER_SETTINGS', provider_settings), \
-             patch.object(settings, 'SOCIAL_OAUTH_ENCRYPTION_KEY', Fernet.generate_key().decode()):
-            instagram = next(
-                item for item in social_intelligence.get_platform_connections(self.user_id)
-                if item['platform'] == 'instagram'
-            )
-
-        self.assertEqual(instagram['missing_configuration'], ['META_APP_ID', 'META_APP_SECRET'])
-        self.assertNotIn('configured-secret', instagram['missing_configuration'])
 
 
 if __name__ == '__main__':

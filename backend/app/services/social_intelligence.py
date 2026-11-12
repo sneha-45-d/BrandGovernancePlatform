@@ -27,38 +27,11 @@ PLATFORM_LABELS = {
     'manual': 'User submitted',
 }
 PROVIDER_SETUP = {
-    'instagram': 'Meta developer app, Instagram Graph API permissions, OAuth callback, and an eligible professional account linked to an accessible Facebook Page.',
-    'facebook': 'Meta developer app, approved Page read permissions, OAuth callback, and a Facebook Page role that grants content access.',
+    'instagram': 'Meta developer app, Instagram Graph API product, approved permissions, and OAuth callback.',
+    'facebook': 'Meta developer app, Facebook Graph API permissions, page access token, and OAuth callback.',
     'youtube': 'Google Cloud OAuth client, YouTube Data API enabled, and authorized callback.',
     'x': 'X developer app, OAuth 2.0 user-context access, and authorized callback.',
-    'linkedin': 'LinkedIn developer app with approved restricted r_member_social access and OAuth callback.',
-}
-PROVIDER_CONFIGURATION_KEYS = {
-    'instagram': {
-        'client_id': 'META_APP_ID',
-        'client_secret': 'META_APP_SECRET',
-        'redirect_uri': 'INSTAGRAM_REDIRECT_URI (or META_REDIRECT_URI)',
-    },
-    'facebook': {
-        'client_id': 'META_APP_ID',
-        'client_secret': 'META_APP_SECRET',
-        'redirect_uri': 'FACEBOOK_REDIRECT_URI (or META_REDIRECT_URI)',
-    },
-    'youtube': {
-        'client_id': 'YOUTUBE_CLIENT_ID',
-        'client_secret': 'YOUTUBE_CLIENT_SECRET',
-        'redirect_uri': 'YOUTUBE_REDIRECT_URI',
-    },
-    'x': {
-        'client_id': 'X_CLIENT_ID',
-        'client_secret': 'X_CLIENT_SECRET',
-        'redirect_uri': 'X_REDIRECT_URI',
-    },
-    'linkedin': {
-        'client_id': 'LINKEDIN_CLIENT_ID',
-        'client_secret': 'LINKEDIN_CLIENT_SECRET',
-        'redirect_uri': 'LINKEDIN_REDIRECT_URI',
-    },
+    'linkedin': 'LinkedIn developer app, approved member/organization permissions, and OAuth callback.',
 }
 
 
@@ -437,13 +410,6 @@ def get_platform_connections(user_id):
         settings_for_platform = settings.SOCIAL_PROVIDER_SETTINGS[platform]
         configured = all(settings_for_platform.values())
         encryption_configured = bool(settings.SOCIAL_OAUTH_ENCRYPTION_KEY)
-        missing_configuration = [
-            PROVIDER_CONFIGURATION_KEYS[platform][key]
-            for key, value in settings_for_platform.items()
-            if not value
-        ]
-        if not encryption_configured:
-            missing_configuration.append('SOCIAL_OAUTH_ENCRYPTION_KEY')
         oauth_ready = configured and encryption_configured
         connections.append({
             'platform': platform,
@@ -451,16 +417,7 @@ def get_platform_connections(user_id):
             'status': 'not_connected' if oauth_ready else 'configuration_required',
             'credentials_configured': configured,
             'encryption_configured': encryption_configured,
-            'missing_configuration': missing_configuration,
             'setup_requirements': PROVIDER_SETUP[platform],
             'oauth_available': oauth_ready,
-            'sync_supported': platform != 'manual',
-            'sync_description': {
-                'instagram': 'Sync recent media and matching comments from Instagram professional accounts linked to your authorized Pages.',
-                'facebook': 'Sync recent posts and matching comments from authorized Facebook Pages.',
-                'youtube': 'Sync recent videos and matching comments from this authorized channel.',
-                'x': 'Sync recent posts by and mentions of this authorized X account.',
-                'linkedin': 'Sync recent posts authored by this authorized LinkedIn member.',
-            }.get(platform, ''),
         })
     return connections

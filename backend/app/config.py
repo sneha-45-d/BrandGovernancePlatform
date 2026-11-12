@@ -22,8 +22,6 @@ class Settings:
     GOOGLE_API_KEY = GEMINI_API_KEY
     GEMINI_MODEL = (os.getenv('GEMINI_MODEL') or 'gemini-3.5-flash').strip()
     SOCIAL_OAUTH_ENCRYPTION_KEY = os.getenv('SOCIAL_OAUTH_ENCRYPTION_KEY', '').strip()
-    YOUTUBE_API_KEY = os.getenv('YOUTUBE_API_KEY', '').strip()
-    X_BEARER_TOKEN = os.getenv('X_BEARER_TOKEN', '').strip()
     SOCIAL_PROVIDER_SETTINGS = {
         'instagram': {'client_id': os.getenv('META_APP_ID', '').strip(), 'client_secret': os.getenv('META_APP_SECRET', '').strip(), 'redirect_uri': (os.getenv('INSTAGRAM_REDIRECT_URI') or os.getenv('META_REDIRECT_URI') or '').strip()},
         'facebook': {'client_id': os.getenv('META_APP_ID', '').strip(), 'client_secret': os.getenv('META_APP_SECRET', '').strip(), 'redirect_uri': (os.getenv('FACEBOOK_REDIRECT_URI') or os.getenv('META_REDIRECT_URI') or '').strip()},

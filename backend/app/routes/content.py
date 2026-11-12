@@ -1,13 +1,10 @@
 import asyncio
-import base64
 import json
 import logging
 import re
 import sqlite3
 from datetime import datetime, timezone
-from io import BytesIO
 from typing import Literal
-from urllib.parse import quote
 
 from bson import ObjectId
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
@@ -15,14 +12,12 @@ from google import genai
 from google.genai import types
 from pydantic import BaseModel, Field
 from pymongo.errors import PyMongoError
-from starlette.responses import StreamingResponse
 
 from app.config import settings
 from app.database import local_store
 from app.database.mongo import get_db
 from app.security import get_authenticated_user, verify_user_scope
 from app.services import clash_service, scoring_service, tone_service
-from app.services.content_correction import create_corrected_document
 from app.services.content_ingestion import (
     MAX_UPLOAD_BYTES,
     MediaFile,
@@ -37,21 +32,6 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 content_collection = get_db()['content_analysis']
 guidelines_collection = get_db()['brand_guidelines']
-
-
-def raise_multimodal_http_error(error: MultimodalAnalysisError):
-    status_by_error = {
-        'invalid_api_key': 503,
-        'api_access_denied': 403,
-        'quota_exceeded': 429,
-        'unsupported_media': 422,
-        'processing_timeout': 504,
-        'provider_unavailable': 503,
-    }
-    raise HTTPException(
-        status_code=status_by_error.get(error.error_code, 502),
-        detail=f'{error} No text-only fallback was used.',
-    ) from None
 
 
 class BrandGuidelinesInput(BaseModel):
@@ -377,18 +357,16 @@ Rules:
             }
         except Exception as exc:
             last_error = exc
-            logger.warning('Gemini model %s failed (%s).', model_name, type(exc).__name__)
-            if media_files and isinstance(exc, MultimodalAnalysisError):
-                raise_multimodal_http_error(exc)
+            logger.warning('Gemini model %s failed: %s', model_name, exc)
             if '429' in str(exc) or 'quota' in str(exc).lower():
                 await asyncio.sleep(1.0)
 
     if media_files:
-        logger.error('Gemini media analysis failed (%s).', type(last_error).__name__ if last_error else 'unknown')
-        raise HTTPException(
-            status_code=502,
-            detail='Gemini could not complete the media analysis. No text-only fallback was used.',
-        ) from None
+        detail = 'Gemini could not complete the media analysis. No text-only fallback was used.'
+        if isinstance(last_error, MultimodalAnalysisError):
+            detail = f'{last_error} No text-only fallback was used.'
+        logger.error('Gemini media analysis failed', exc_info=last_error)
+        raise HTTPException(status_code=502, detail=detail) from last_error
 
     warning = 'Gemini AI rate limit or quota exceeded. Local governance rules were used for this check.'
     if last_error and '404' in str(last_error):
@@ -396,33 +374,15 @@ Rules:
     return build_local_analysis(content, brand_name, guidelines, warning_msg=warning)
 
 
-async def run_ai_content_correction(
-    content: str,
-    brand_name: str,
-    guidelines: dict,
-    media_files: list[MediaFile] | None = None,
-    analysis_context: dict | None = None,
-) -> dict:
+async def run_ai_content_correction(content: str, brand_name: str, guidelines: dict) -> dict:
     api_key = settings.GOOGLE_API_KEY or ''
-    media_files = media_files or []
     if not is_valid_gemini_key(api_key):
-        if media_files:
-            raise HTTPException(
-                status_code=503,
-                detail='Configure a valid Gemini API key to correct content using the uploaded media.',
-            )
         return build_local_correction(content, brand_name, guidelines, warning_msg='Gemini API key is not configured. Result generated using local substitutions.')
 
     guideline_context = build_guideline_context(guidelines)
-    analysis_context = analysis_context or {}
-    context_summary = str(analysis_context.get('summary') or '').strip()
-    context_findings = json.dumps({
-        'violations': analysis_context.get('violations') or [],
-        'recommendations': analysis_context.get('recommendations') or [],
-    }, ensure_ascii=False)
     prompt = """
 You are BRANDITHM AI Copy Improvement Engine.
-Rewrite the submitted content to improve clarity, grammar, tone, readability, and brand alignment while preserving its original meaning and purpose.
+Rewrite the original content to improve clarity, grammar, tone, readability, and brand alignment while preserving the original meaning.
 
 Brand:
 {brand_name}
@@ -430,13 +390,7 @@ Brand:
 Brand guidelines:
 {guideline_context}
 
-Previous analysis summary:
-{analysis_summary}
-
-Previous analysis findings:
-{analysis_findings}
-
-Source content and media:
+Original content:
 {content}
 
 Return valid JSON only with the following schema:
@@ -452,14 +406,9 @@ Rules:
 - Remove unsupported claims, restricted words, or overpromotional language.
 - Improve brand tone and readability while preserving meaning.
 - Keep the rewrite clear, concise, and enterprise-ready.
-- Preserve paragraph breaks, headings, and the original content structure where possible.
-- When source media is attached, use only details visible or audible in that media. Do not invent missing information.
-- Return corrected words, captions, transcript, or copy as text. Do not claim to have edited or generated an image, audio, or video file.
 """.format(
         brand_name=brand_name,
         guideline_context=guideline_context,
-        analysis_summary=context_summary,
-        analysis_findings=context_findings,
         content=content,
     )
 
@@ -475,29 +424,22 @@ Rules:
         if not model_name:
             continue
         try:
-            if media_files:
-                raw_response = await generate_multimodal_content(model_name, prompt, media_files, api_key=api_key)
-            else:
-                def _call_correction():
-                    return client.models.generate_content(
-                        model=model_name,
-                        contents=prompt,
-                        config=types.GenerateContentConfig(
-                            temperature=0.25,
-                            response_mime_type='application/json',
-                            max_output_tokens=2048,
-                        ),
-                    )
+            def _call_correction():
+                return client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=0.25,
+                        response_mime_type='application/json',
+                        max_output_tokens=2048,
+                    ),
+                )
 
-                response = await asyncio.to_thread(_call_correction)
-                raw_response = response.text
-            parsed = parse_ai_json_response(raw_response)
-            corrected_content = parsed.get('corrected_content')
-            if not isinstance(corrected_content, str) or not corrected_content.strip():
-                raise ValueError('Gemini did not return corrected content.')
+            response = await asyncio.to_thread(_call_correction)
+            parsed = parse_ai_json_response(response.text)
 
             return {
-                'corrected_content': corrected_content.strip(),
+                'corrected_content': parsed.get('corrected_content') or content,
                 'changes_made': parsed.get('changes_made') or [],
                 'summary': parsed.get('summary') or 'Content was refined to match brand voice and clarity standards.',
                 'improvements': parsed.get('improvements') or [],
@@ -505,19 +447,10 @@ Rules:
             }
         except Exception as exc:
             last_error = exc
-            logger.warning('Gemini correction model %s failed (%s).', model_name, type(exc).__name__)
-            if media_files and isinstance(exc, MultimodalAnalysisError):
-                raise_multimodal_http_error(exc)
+            logger.warning('Gemini correction model %s failed: %s', model_name, exc)
             if '429' in str(exc) or 'quota' in str(exc).lower():
                 await asyncio.sleep(1.0)
             continue
-
-    if media_files:
-        logger.error('Gemini media correction failed (%s).', type(last_error).__name__ if last_error else 'unknown')
-        raise HTTPException(
-            status_code=502,
-            detail='Gemini could not complete the media-aware correction. No text-only fallback was used.',
-        ) from None
 
     warning = 'Gemini AI rate limit or quota exceeded. Local text substitutions were applied.'
     return build_local_correction(content, brand_name, guidelines, warning_msg=warning)
@@ -930,27 +863,8 @@ async def analyze_content(
 
     if storage_warning:
         response['storage_warning'] = storage_warning
-    response['source_text'] = cleaned_content
 
     return response
-
-
-def _encode_correction_metadata(correction: dict) -> str:
-    metadata = {
-        'message': 'Content corrected successfully.',
-        'brand_name': correction.get('brand_name'),
-        'summary': correction.get('summary'),
-        'changes_made': correction.get('changes_made') or [],
-        'improvements': correction.get('improvements') or [],
-        'engine': correction.get('engine', 'local'),
-        'warning': correction.get('warning'),
-    }
-    encoded = base64.b64encode(json.dumps(metadata, ensure_ascii=False).encode('utf-8')).decode('ascii')
-    if len(encoded) > 6000:
-        metadata['changes_made'] = metadata['changes_made'][:5]
-        metadata['improvements'] = metadata['improvements'][:5]
-        encoded = base64.b64encode(json.dumps(metadata, ensure_ascii=False).encode('utf-8')).decode('ascii')
-    return encoded
 
 
 @router.post('/content/correct')
@@ -959,12 +873,10 @@ async def correct_content(
     user_id: str | None = Form(None),
     brand_name: str = Form('BRANDITHM'),
     guidelines: str = Form('{}'),
-    analysis_context: str = Form('{}'),
-    file: UploadFile | None = File(None),
     current_user: dict = Depends(get_authenticated_user),
 ):
     user_id = verify_user_scope(current_user, user_id)
-    if not (content or '').strip() and file is None:
+    if not content or not content.strip():
         raise HTTPException(status_code=400, detail='No content supplied for AI correction.')
 
     guideline_payload = {}
@@ -974,15 +886,6 @@ async def correct_content(
         except json.JSONDecodeError:
             guideline_payload = {}
     guideline_payload['user_id'] = user_id
-
-    analysis_payload = {}
-    if analysis_context:
-        try:
-            analysis_payload = json.loads(analysis_context)
-            if not isinstance(analysis_payload, dict):
-                raise ValueError('Analysis context must be a JSON object.')
-        except (json.JSONDecodeError, ValueError) as exc:
-            raise HTTPException(status_code=400, detail='The analysis context must be a valid JSON object.') from exc
 
     if not guideline_payload:
         guideline_payload = {
@@ -997,81 +900,15 @@ async def correct_content(
             'brand_communication_rules': 'Avoid exaggerated claims, hype, and vague language. Keep claims precise and evidence-based.'
         }
 
-    ingested_file = None
-    filename = ''
-    if file is not None:
-        if not file.filename:
-            raise HTTPException(status_code=400, detail='The uploaded file must have a filename.')
-        filename = file.filename
-        file_bytes = await file.read(MAX_UPLOAD_BYTES + 1)
-        if len(file_bytes) > MAX_UPLOAD_BYTES:
-            raise HTTPException(status_code=413, detail='The uploaded file exceeds the 25 MB limit.')
-        ingested_file = ingest_content_file(filename, file_bytes)
-
-    source_content = (content or '').strip()
-    if not source_content and ingested_file:
-        source_content = ingested_file.extracted_text.strip()
-    if not source_content and ingested_file and ingested_file.media_files:
-        source_content = f'Create corrected brand-safe copy based on the uploaded {ingested_file.content_type} asset.'
-    if not source_content:
-        raise HTTPException(status_code=422, detail='The uploaded file contains no readable content to correct.')
-
-    if ingested_file and ingested_file.requires_multimodal_ai and not is_valid_gemini_key(settings.GOOGLE_API_KEY):
-        raise HTTPException(
-            status_code=503,
-            detail='Configure a valid Gemini API key to correct this media file.',
-        )
-    media_files = []
-    if ingested_file and is_valid_gemini_key(settings.GOOGLE_API_KEY):
-        media_files = ingested_file.media_files
-
-    correction = await run_ai_content_correction(
-        source_content,
-        brand_name,
-        guideline_payload,
-        media_files=media_files,
-        analysis_context=analysis_payload,
-    )
-    response_data = {
+    correction = await run_ai_content_correction(content, brand_name, guideline_payload)
+    return {
         'message': 'Content corrected successfully.',
         'brand_name': brand_name,
-        'original_content': source_content,
-        'corrected_content': correction.get('corrected_content') or source_content,
+        'original_content': content,
+        'corrected_content': correction.get('corrected_content') or content,
         'changes_made': correction.get('changes_made') or [],
         'summary': correction.get('summary') or 'Content was refined to match brand voice and clarity standards.',
         'improvements': correction.get('improvements') or [],
         'engine': correction.get('engine', 'local'),
         'warning': correction.get('warning'),
     }
-    if ingested_file and ingested_file.content_type in {'image', 'audio', 'video'}:
-        response_data['warning'] = (
-            'The AI returned corrected text only. This deployment does not yet include an image, audio, or video editing provider, '
-            'so the uploaded media was not rewritten or converted.'
-        )
-        response_data['output_file'] = None
-        return response_data
-
-    if ingested_file:
-        corrected_file, output_filename, output_mime_type = create_corrected_document(
-            filename,
-            response_data['corrected_content'],
-        )
-        headers = {
-            'Content-Disposition': f"attachment; filename*=UTF-8''{quote(output_filename)}",
-            'X-Brandithm-Correction': _encode_correction_metadata(response_data),
-            'X-Brandithm-Filename': quote(output_filename),
-            'Cache-Control': 'no-store',
-        }
-        if filename.lower().endswith(('.pdf', '.docx', '.pptx')):
-            response_data['warning'] = (
-                'The corrected file keeps the original file type, but is rebuilt as a clean document; '
-                'the uploaded document’s original visual layout and embedded artwork are not retained.'
-            )
-            headers['X-Brandithm-Correction'] = _encode_correction_metadata(response_data)
-        return StreamingResponse(
-            BytesIO(corrected_file),
-            media_type=output_mime_type,
-            headers=headers,
-        )
-
-    return response_data

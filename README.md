@@ -21,8 +21,8 @@ Brandithm is a brand governance platform for reviewing written content against a
 - Dashboard and Brand Intelligence views for reviewing recent activity and brand health.
 - Editable Brand Guidelines shared with content analysis and AI correction.
 - Content analysis for text, PDF, DOCX, PPTX, images, audio, and video, with scores, detected issues, recommendations, and review history. Image/audio/video and presentation slide-image analysis require a configured Gemini API key.
-- AI-assisted correction carries the analyzed source file and findings into the correction flow. TXT, MD, PDF, DOCX, and PPTX downloads retain the source file extension; PDF/DOCX/PPTX are rebuilt with a clean layout rather than preserving the uploaded artwork or formatting. Image/audio/video correction currently returns corrected text only; it does not rewrite the media asset.
-- Social Media Intelligence with per-account monitoring terms, public-post URL fetching, provenance-labeled mention records, Gemini sentiment analysis, competitor profiles, and evidence-based alerts. The no-social-login URL flow fetches specific YouTube and X posts through official APIs when server-side API credentials and provider access are configured. Instagram, Facebook, and LinkedIn public URL lookups are reported unsupported; the app does not scrape pages. Legacy authorized account-sync endpoints remain permission-scoped and are not required for URL fetching.
+- Social Media Intelligence with per-account monitoring terms, provenance-labeled mention records, Gemini sentiment analysis, competitor profiles, evidence-based alerts, and provider connection status.
+- AI-assisted content correction.
 - Review Queue actions to approve a report or request revisions.
 - Light and dark themes.
 - Gemini-backed analysis and correction when a Google AI API key is configured; local rule-based checks are used when Gemini is unavailable.
@@ -52,7 +52,7 @@ Copy-Item .env.example .env
 
 Open `C:\Users\vishu\BrandGovernancePlatform\backend\.env` and replace the placeholder on the `GEMINI_API_KEY` line with your own key, for example `GEMINI_API_KEY=your_actual_key`. Do not send the key in chat or commit this ignored file. The backend reads the key; it is never sent to the frontend. Without it, Gemini sentiment and reply-draft requests show a configuration error instead of returning fabricated AI output.
 
-Public post URL fetching does not require social-account OAuth. Set `YOUTUBE_API_KEY` and/or `X_BEARER_TOKEN` in `backend\.env` using server-side credentials for the YouTube Data API and X API post lookup, then restart the backend. The user submits a specific public URL; only YouTube and X are currently supported. Meta/Instagram and LinkedIn do not expose arbitrary public-post lookup for this app's current permissions, so those URLs return an explicit unsupported response rather than being scraped or redirected to login. API approval, access tier, quota, and rate limits still apply. Legacy OAuth account sync can be configured separately using the provider placeholders; it is not needed for this URL-fetch flow. Reply suggestions are drafts only and are never published.
+Social OAuth credentials may be added to `backend\.env` using the provider placeholders. Generate an encryption key in the backend environment with `.\.venv\Scripts\python.exe -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` and set it as `SOCIAL_OAUTH_ENCRYPTION_KEY`. Register each callback URL from `backend\.env.example` in the matching provider developer console. Account linking uses OAuth and encrypts stored access/refresh tokens. Linking an account alone does not grant access to public posts or enable monitoring; posts still require separate provider API permissions and ingestion support. Reply suggestions are drafts only and are never published.
 
 ### Social Intelligence verification
 
@@ -115,8 +115,6 @@ Backend settings are read from `backend/.env`. The checked-in `backend/.env.exam
 | `CHROMA_DB_PATH` | Chroma data directory; defaults to `backend/app/data/chroma`. |
 | `ALLOWED_ORIGINS` | Comma-separated browser origins permitted by the API. |
 | `VITE_API_BASE_URL` | Frontend build-time variable. Set it to the deployed FastAPI origin in the frontend host (for example `https://api.example.com`); leave it blank for local Vite development. Do not add a trailing `/api`. |
-
-When both `GEMINI_API_KEY` and `GOOGLE_API_KEY` are set, `GEMINI_API_KEY` takes precedence. Multimodal analysis uses the Google Gen AI SDK, retries transient provider outages, and reports invalid keys, API restrictions, quota errors, and unsupported media instead of returning a successful text-only fallback.
 
 For MongoDB Atlas, use a **database user** in the connection URI, not your Atlas website login. Ensure the deployment's IP is allowed in the Atlas network access list. URI-encode reserved characters in the database username or password.
 

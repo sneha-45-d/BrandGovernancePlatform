@@ -10,17 +10,13 @@ import {
   Wand2,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { useLocation } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
 import { getApiErrorMessage } from '../lib/apiError'
 import { defaultGuidelines, getUserStorageKey, loadBrandGuidelines, normalizeGuidelines } from '../lib/brandData'
 
 export default function AICorrectionPage() {
-  const location = useLocation()
-  const [sourceFile] = useState(() => location.state?.file || null)
-  const [analysisContext] = useState(() => location.state?.analysisContext || {})
   const [guidelines, setGuidelines] = useState(defaultGuidelines)
-  const [content, setContent] = useState(() => location.state?.content || localStorage.getItem(getUserStorageKey('brandithm-correction-content')) || '')
+  const [content, setContent] = useState(() => localStorage.getItem(getUserStorageKey('brandithm-correction-content')) || '')
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
   const [guidelinesLoading, setGuidelinesLoading] = useState(true)
@@ -47,8 +43,8 @@ export default function AICorrectionPage() {
   const handleSubmit = async (event) => {
     event.preventDefault()
 
-    if (!content.trim() && !sourceFile) {
-      setError('Enter content or return to Content Analysis and choose a file to correct.')
+    if (!content.trim()) {
+      setError('Please enter the original content you want improved.')
       return
     }
 
@@ -64,50 +60,16 @@ export default function AICorrectionPage() {
       formData.append('brand_name', guidelines.brand_name)
       formData.append('content', content)
       formData.append('guidelines', JSON.stringify(payload))
-      formData.append('analysis_context', JSON.stringify(analysisContext))
-      if (sourceFile) formData.append('file', sourceFile)
 
       const response = await axios.post('/api/content/correct', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
-        responseType: 'arraybuffer',
       })
 
-      const contentType = response.headers['content-type'] || ''
-      if (contentType.includes('application/json')) {
-        const correction = JSON.parse(new TextDecoder().decode(response.data))
-        setResult({ ...correction, output_file: null })
-      } else {
-        const encodedMetadata = response.headers['x-brandithm-correction'] || ''
-        const metadataBytes = Uint8Array.from(atob(encodedMetadata), (character) => character.charCodeAt(0))
-        const metadata = JSON.parse(new TextDecoder().decode(metadataBytes))
-        const outputFileName = decodeURIComponent(response.headers['x-brandithm-filename'] || 'brandithm-corrected.txt')
-        const correctedFile = new Blob([response.data], { type: contentType })
-        const correctedText = contentType.startsWith('text/') ? await correctedFile.text() : ''
-        setResult({
-          ...metadata,
-          corrected_content: correctedText,
-          output_file: correctedFile,
-          output_file_name: outputFileName,
-        })
-      }
+      setResult(response.data)
       localStorage.setItem(getUserStorageKey('brandithm-correction-content'), content)
     } catch (requestError) {
-      let normalizedError = requestError
-      if (requestError.response?.data instanceof ArrayBuffer) {
-        try {
-          normalizedError = {
-            ...requestError,
-            response: {
-              ...requestError.response,
-              data: JSON.parse(new TextDecoder().decode(requestError.response.data)),
-            },
-          }
-        } catch {
-          normalizedError = requestError
-        }
-      }
       setError(getApiErrorMessage(
-        normalizedError,
+        requestError,
         'Unable to generate corrected content. Check the backend configuration or Gemini quota.'
       ))
     } finally {
@@ -128,17 +90,17 @@ export default function AICorrectionPage() {
   }
 
   const handleDownload = () => {
-    if (!result?.output_file && !result?.corrected_content) return
+    if (!result?.corrected_content) return
 
-    const blob = result.output_file || new Blob([result.corrected_content], { type: 'text/plain;charset=utf-8' })
+    const blob = new Blob([result.corrected_content], { type: 'text/plain;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = result.output_file_name || 'brandithm-corrected-content.txt'
+    link.download = 'brandithm-corrected-content.txt'
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+    URL.revokeObjectURL(url)
   }
 
   return (
@@ -190,12 +152,6 @@ export default function AICorrectionPage() {
                       placeholder="Paste the original ad, caption, email headline, or product description here..."
                       className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
                     />
-                    {sourceFile && (
-                      <p className="mt-2 text-xs text-slate-500">
-                        Source file: <span className="font-semibold text-slate-700">{sourceFile.name}</span>
-                        {' · '}the corrected download will retain the file extension.
-                      </p>
-                    )}
                   </div>
 
                   {error && (
@@ -284,13 +240,7 @@ export default function AICorrectionPage() {
                         <h3 className="text-2xl font-bold tracking-tight text-slate-950">Before</h3>
                       </div>
                     </div>
-                    {content ? (
-                      <p className="whitespace-pre-wrap text-sm leading-7 text-slate-600">{content}</p>
-                    ) : (
-                      <p className="text-sm leading-7 text-slate-600">
-                        {sourceFile ? `Original ${sourceFile.type || 'media'} file: ${sourceFile.name}` : 'No source text was provided.'}
-                      </p>
-                    )}
+                    <p className="whitespace-pre-wrap text-sm leading-7 text-slate-600">{content}</p>
                   </div>
 
                   <div className="surface-panel rounded-[2rem] p-6 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
@@ -303,36 +253,25 @@ export default function AICorrectionPage() {
                         <h3 className="text-2xl font-bold tracking-tight text-slate-950">After</h3>
                       </div>
                     </div>
-                    {result.corrected_content ? (
-                      <p className="whitespace-pre-wrap text-sm leading-7 text-slate-600">{result.corrected_content}</p>
-                    ) : (
-                      <p className="text-sm leading-7 text-slate-600">
-                        {result.output_file_name
-                          ? `The corrected ${sourceFile?.name.split('.').pop()?.toUpperCase() || 'document'} is ready to download.`
-                          : 'Corrected text is shown below; the original image, audio, or video file was not edited.'}
-                      </p>
-                    )}
+                    <p className="whitespace-pre-wrap text-sm leading-7 text-slate-600">{result.corrected_content}</p>
 
                     <div className="mt-5 flex flex-wrap gap-3">
                       <button
                         type="button"
                         onClick={handleCopy}
-                        disabled={!result.corrected_content}
                         className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-emerald-200 hover:text-emerald-700"
                       >
                         <Copy className="h-4 w-4" />
                         {copied ? 'Copied' : 'Copy corrected content'}
                       </button>
-                      {(result.output_file || result.corrected_content) && (
-                        <button
-                          type="button"
-                          onClick={handleDownload}
-                          className="inline-flex items-center gap-2 rounded-full bg-emerald-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-green-900"
-                        >
-                          <Download className="h-4 w-4" />
-                          {result.output_file_name ? `Download ${result.output_file_name}` : 'Download corrected text (.txt)'}
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={handleDownload}
+                        className="inline-flex items-center gap-2 rounded-full bg-emerald-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-green-900"
+                      >
+                        <Download className="h-4 w-4" />
+                        Download
+                      </button>
                     </div>
                   </div>
                 </div>

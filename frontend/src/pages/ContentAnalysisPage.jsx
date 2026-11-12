@@ -197,16 +197,14 @@ export default function ContentAnalysisPage() {
         clash_report: response.data.clash_report || response.data.analysis?.clash_report,
         champion_update: response.data.champion_update,
       }
-      const sourceText = response.data.source_text ?? content
 
       setAnalysis(analysisResult)
-      setContent(sourceText)
       setActiveReportId(response.data.report_id || null)
       const localEntry = saveLocalAnalysis({
         reportId: response.data.report_id,
         title: selectedFile ? selectedFile.name : 'Marketing copy review',
         brandName: guidelines.brand_name,
-        content: sourceText,
+        content,
         analysis: analysisResult,
       })
       setHistory((current) => [
@@ -220,7 +218,7 @@ export default function ContentAnalysisPage() {
       if (response.data.report_id) {
         void fetchHistory()
       }
-      localStorage.setItem(getUserStorageKey('brandithm-analysis-content'), sourceText)
+      localStorage.setItem(getUserStorageKey('brandithm-analysis-content'), content)
     } catch (requestError) {
       setError(getApiErrorMessage(
         requestError,
@@ -238,7 +236,6 @@ export default function ContentAnalysisPage() {
       })
       setAnalysis(response.data.analysis)
       setContent(response.data.content || '')
-      setSelectedFile(null)
       setActiveReportId(reportId)
       setError('')
     } catch (requestError) {
@@ -262,23 +259,13 @@ export default function ContentAnalysisPage() {
   }
 
   const handleSendToCorrection = () => {
-    if (!content.trim() && !selectedFile) {
+    if (!content.trim()) {
       setError('Add content to the analyzer before sending it to AI Correction.')
       return
     }
 
     localStorage.setItem(getUserStorageKey('brandithm-correction-content'), content)
-    navigate('/ai-correction', {
-      state: {
-        content,
-        file: selectedFile,
-        analysisContext: {
-          summary: analysis?.summary || '',
-          violations: analysis?.violations || [],
-          recommendations: analysis?.recommendations || [],
-        },
-      },
-    })
+    navigate('/ai-correction')
   }
 
   return (

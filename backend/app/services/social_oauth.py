@@ -17,15 +17,15 @@ logger = logging.getLogger(__name__)
 OAUTH_STATE_TTL = timedelta(minutes=10)
 OAUTH_TIMEOUT_SECONDS = 12
 PROVIDER_AUTH_URLS = {
-    'instagram': 'https://www.facebook.com/v27.0/dialog/oauth',
-    'facebook': 'https://www.facebook.com/v27.0/dialog/oauth',
+    'instagram': 'https://www.facebook.com/v21.0/dialog/oauth',
+    'facebook': 'https://www.facebook.com/v21.0/dialog/oauth',
     'youtube': 'https://accounts.google.com/o/oauth2/v2/auth',
     'x': 'https://twitter.com/i/oauth2/authorize',
     'linkedin': 'https://www.linkedin.com/oauth/v2/authorization',
 }
 PROVIDER_TOKEN_URLS = {
-    'instagram': 'https://graph.facebook.com/v27.0/oauth/access_token',
-    'facebook': 'https://graph.facebook.com/v27.0/oauth/access_token',
+    'instagram': 'https://graph.facebook.com/v21.0/oauth/access_token',
+    'facebook': 'https://graph.facebook.com/v21.0/oauth/access_token',
     'youtube': 'https://oauth2.googleapis.com/token',
     'x': 'https://api.x.com/2/oauth2/token',
     'linkedin': 'https://www.linkedin.com/oauth/v2/accessToken',
@@ -135,23 +135,9 @@ def _exchange_token(platform, code, config, state_data):
             raise HTTPException(status_code=502, detail='The social provider did not return an access token.')
 
         if platform in {'instagram', 'facebook'}:
-            extended_response = client.get(
-                PROVIDER_TOKEN_URLS[platform],
-                params={
-                    'grant_type': 'fb_exchange_token',
-                    'client_id': config['client_id'],
-                    'client_secret': config['client_secret'],
-                    'fb_exchange_token': access_token,
-                },
-            )
-            extended_response.raise_for_status()
-            extended_token = extended_response.json()
-            access_token = extended_token.get('access_token') or access_token
-            token['expires_in'] = extended_token.get('expires_in', token.get('expires_in'))
             profile_response = client.get(
-                'https://graph.facebook.com/v27.0/me',
-                params={'fields': 'id,name'},
-                headers={'Authorization': f'Bearer {access_token}'},
+                'https://graph.facebook.com/v21.0/me',
+                params={'fields': 'id,name', 'access_token': access_token},
             )
             profile_response.raise_for_status()
             profile = profile_response.json()
