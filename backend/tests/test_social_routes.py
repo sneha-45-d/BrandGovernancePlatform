@@ -242,6 +242,115 @@ class SocialRouteTests(unittest.TestCase):
             {'Northstar': 1, 'Acme': 1},
         )
 
+    def test_youtube_sync_is_exposed_and_scoped_to_the_authenticated_user(self):
+        config_response = self.client.put('/api/social/config', json={
+            'user_id': self.user_id,
+            'brand_name': 'Northstar',
+            'keywords': ['Northstar'],
+            'enabled': True,
+        })
+        self.assertEqual(config_response.status_code, 200)
+        provider_config = self.client.get('/api/social/config', params={'user_id': self.user_id})
+        self.assertEqual(provider_config.status_code, 200)
+        provider_status = {item['platform']: item for item in provider_config.json()['platforms']}
+        self.assertTrue(provider_status['youtube']['sync_supported'])
+        self.assertTrue(all(provider_status[platform]['sync_supported'] for platform in (
+            'instagram', 'facebook', 'x', 'linkedin',
+        )))
+
+        with patch(
+            'app.routes.social.youtube_service.sync_youtube_mentions',
+            return_value={
+                'platform': 'youtube',
+                'videos_checked': 2,
+                'records_checked': 3,
+                'matching_records': 2,
+                'mentions_added': 1,
+                'duplicates_skipped': 1,
+                'warnings': [],
+                'collection_scope': 'Connected channel only.',
+            },
+        ) as sync:
+            response = self.client.post(
+                '/api/social/integrations/youtube/mentions/sync',
+                params={'user_id': self.user_id},
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()['mentions_added'], 1)
+        self.assertIn('1 new matching mention', response.json()['message'])
+        sync.assert_called_once_with(self.user_id, config_response.json()['config'])
+
+        cross_user = self.client.post(
+            '/api/social/integrations/youtube/mentions/sync',
+            params={'user_id': self.other_user_id},
+        )
+        self.assertEqual(cross_user.status_code, 403)
+
+    def test_connected_provider_sync_routes_dispatch_to_authorized_collectors(self):
+        config_response = self.client.put('/api/social/config', json={
+            'user_id': self.user_id,
+            'brand_name': 'Northstar',
+            'keywords': ['Northstar'],
+            'enabled': True,
+        })
+        self.assertEqual(config_response.status_code, 200)
+        collectors = {
+            'facebook': ('app.routes.social.meta_service.sync_meta_mentions', (self.user_id, config_response.json()['config'], 'facebook')),
+            'instagram': ('app.routes.social.meta_service.sync_meta_mentions', (self.user_id, config_response.json()['config'], 'instagram')),
+            'x': ('app.routes.social.x_service.sync_x_mentions', (self.user_id, config_response.json()['config'])),
+            'linkedin': ('app.routes.social.linkedin_service.sync_linkedin_mentions', (self.user_id, config_response.json()['config'])),
+        }
+        for platform, (target, expected_args) in collectors.items():
+            with patch(target, return_value={
+                'platform': platform,
+                'records_checked': 0,
+                'matching_records': 0,
+                'mentions_added': 0,
+                'duplicates_skipped': 0,
+                'warnings': [],
+                'collection_scope': 'Authorized account only.',
+            }) as sync:
+                response = self.client.post(
+                    f'/api/social/integrations/{platform}/mentions/sync',
+                    params={'user_id': self.user_id},
+                )
+            self.assertEqual(response.status_code, 200, response.text)
+            sync.assert_called_once_with(*expected_args)
+
+    def test_public_post_fetch_is_authenticated_and_uses_server_fetcher(self):
+        config_response = self.client.put('/api/social/config', json={
+            'user_id': self.user_id,
+            'brand_name': 'Northstar',
+            'enabled': False,
+        })
+        self.assertEqual(config_response.status_code, 200)
+        expected = {
+            'message': 'Fetched through public API.',
+            'collection_scope': 'Specific post only.',
+            'mention': {'id': 'mention-1'},
+        }
+        with patch(
+            'app.routes.social.public_post_service.fetch_public_post',
+            return_value=expected,
+        ) as fetch:
+            response = self.client.post('/api/social/public-posts/fetch', json={
+                'url': 'https://youtu.be/abcdefghijk',
+            })
+
+        self.assertEqual(response.status_code, 201, response.text)
+        self.assertEqual(response.json(), expected)
+        fetch.assert_called_once_with(self.user_id, 'https://youtu.be/abcdefghijk', config_response.json()['config'])
+
+        invalid_url = self.client.post('/api/social/public-posts/fetch', json={'url': 'not a URL'})
+        self.assertEqual(invalid_url.status_code, 422)
+
+        with patch.dict(app.dependency_overrides, {}, clear=True):
+            unauthorized = self.client.post('/api/social/public-posts/fetch', json={
+                'url': 'https://youtu.be/abcdefghijk',
+            })
+        self.assertEqual(unauthorized.status_code, 401)
+
     def test_overview_includes_all_matching_mentions_without_page_limit(self):
         self.client.put('/api/social/config', json={
             'user_id': self.user_id,

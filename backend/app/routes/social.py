@@ -17,6 +17,11 @@ from app.services import post_auditor
 from app.services import social_intelligence
 from app.services import social_oauth
 from app.services import strategy_engine
+from app.services.social_platforms import linkedin as linkedin_service
+from app.services.social_platforms import meta as meta_service
+from app.services.social_platforms import public_post as public_post_service
+from app.services.social_platforms import youtube as youtube_service
+from app.services.social_platforms import x as x_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -52,6 +57,15 @@ class MonitoringConfigInput(BaseModel):
         if len(set(term.casefold() for term in normalized)) != len(normalized):
             raise ValueError('Monitoring terms must not contain duplicates.')
         return normalized
+
+
+class PublicPostFetchInput(BaseModel):
+    url: str = Field(min_length=8, max_length=2048)
+
+    @field_validator('url')
+    @classmethod
+    def trim_url(cls, value):
+        return value.strip()
 
 
 class MentionInput(BaseModel):
@@ -176,6 +190,17 @@ def update_social_config(
         payload.enabled,
     ))
     return {'message': 'Monitoring configuration saved.', 'config': config}
+
+
+@router.post('/social/public-posts/fetch', status_code=201)
+def fetch_public_social_post(
+    payload: PublicPostFetchInput,
+    current_user: dict = Depends(get_authenticated_user),
+):
+    user_id = verify_user_scope(current_user, None)
+    config = _storage_call(lambda: social_store.get_config(user_id))
+    result = _storage_call(lambda: public_post_service.fetch_public_post(user_id, payload.url, config))
+    return result
 
 
 @router.get('/social/mentions')
@@ -437,6 +462,50 @@ def connect_social_platform(
     return {'authorization_url': authorization_url}
 
 
+@router.post('/social/integrations/{platform}/mentions/sync')
+def sync_social_platform(
+    platform: str,
+    user_id: str | None = Query(default=None),
+    current_user: dict = Depends(get_authenticated_user),
+):
+    scoped_user_id = verify_user_scope(current_user, user_id)
+    sync_services = {
+        'youtube': youtube_service.sync_youtube_mentions,
+        'facebook': meta_service.sync_meta_mentions,
+        'instagram': meta_service.sync_meta_mentions,
+        'x': x_service.sync_x_mentions,
+        'linkedin': linkedin_service.sync_linkedin_mentions,
+    }
+    sync_service = sync_services.get(platform)
+    if not sync_service:
+        raise HTTPException(status_code=404, detail='This social platform is not supported for collection.')
+    config = _storage_call(lambda: social_store.get_config(scoped_user_id))
+    if platform in {'facebook', 'instagram'}:
+        result = _storage_call(lambda: sync_service(scoped_user_id, config, platform))
+    else:
+        result = _storage_call(lambda: sync_service(scoped_user_id, config))
+    label = social_intelligence.PLATFORM_LABELS[platform]
+    return {
+        'message': (
+            f"{label} sync completed. {result['mentions_added']} new matching mention(s) were added; "
+            f"{result['duplicates_skipped']} duplicate(s) were skipped."
+        ),
+        **result,
+    }
+
+
+@router.post('/social/integrations/{platform}/sync')
+async def sync_platform(
+    platform: str,
+    user_id: str | None = Query(default=None),
+    current_user: dict = Depends(get_authenticated_user),
+):
+    scoped_user_id = verify_user_scope(current_user, user_id)
+    if platform not in social_oauth.PROVIDER_AUTH_URLS:
+        raise HTTPException(status_code=404, detail='This social platform is not supported.')
+    return await platform_fetcher.sync_platform_posts(scoped_user_id, platform)
+
+
 @router.get('/social/integrations/{platform}/callback')
 def social_platform_callback(
     platform: str,
@@ -486,19 +555,6 @@ def disconnect_social_platform(
     return {
         'message': 'Stored platform tokens were removed. Revoke the Brandithm grant in the platform account settings to invalidate provider-side access.',
     }
-
-
-@router.post('/social/integrations/{platform}/sync')
-async def sync_platform(
-    platform: str,
-    user_id: str | None = Query(default=None),
-    current_user: dict = Depends(get_authenticated_user),
-):
-    scoped_user_id = verify_user_scope(current_user, user_id)
-    if platform not in social_oauth.PROVIDER_AUTH_URLS:
-        raise HTTPException(status_code=404, detail='This social platform is not supported.')
-    res = await platform_fetcher.sync_platform_posts(scoped_user_id, platform)
-    return res
 
 
 @router.get('/social/posts')

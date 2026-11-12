@@ -237,7 +237,7 @@ export default function SocialIntelligencePage({ section = 'overview' }) {
   }, [customEnd, customStart, overviewParams, rangePreset, section])
 
   useEffect(() => {
-    if (!['overview', 'mentions', 'sentiment', 'competitors', 'alerts'].includes(section)) return undefined
+    if (!['overview', 'audit', 'mentions', 'sentiment', 'competitors', 'alerts'].includes(section)) return undefined
     let active = true
     axios.get('/api/social/config', { params: currentUserParams })
       .then(({ data }) => {
@@ -256,25 +256,6 @@ export default function SocialIntelligencePage({ section = 'overview' }) {
       .finally(() => { if (active) setConfigLoading(false) })
     return () => { active = false }
   }, [currentUserParams, section])
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const connectionStatus = params.get('social_connection')
-    if (!connectionStatus) return
-    const platform = params.get('platform') || 'social platform'
-    const message = connectionStatus === 'connected'
-      ? `${platformLabels[platform] || platform} account connected. Authorized post collection is not enabled until its provider-specific ingestion is configured.`
-      : connectionStatus === 'denied'
-        ? `${platformLabels[platform] || platform} account connection was cancelled.`
-        : `${platformLabels[platform] || platform} account connection did not complete. Check provider permissions and callback configuration.`
-    axios.get('/api/social/config', { params: currentUserParams })
-      .then(({ data }) => {
-        setConnections(data.platforms || [])
-        setNotice(message)
-      })
-      .catch((requestError) => setError(getApiErrorMessage(requestError, 'Unable to refresh platform connection status.')))
-    window.history.replaceState({}, '', window.location.pathname)
-  }, [currentUserParams])
 
   useEffect(() => {
     if (!['mentions', 'sentiment'].includes(section)) return undefined
@@ -605,34 +586,6 @@ export default function SocialIntelligencePage({ section = 'overview' }) {
     }
   }
 
-  const connectPlatform = async (platform) => {
-    setWorking(true)
-    setError('')
-    try {
-      const { data } = await axios.get(`/api/social/integrations/${platform}/connect`)
-      window.location.assign(data.authorization_url)
-    } catch (requestError) {
-      setError(getApiErrorMessage(requestError, 'Unable to start platform authorization.'))
-      setWorking(false)
-    }
-  }
-
-  const disconnectPlatform = async (platform) => {
-    setWorking(true)
-    setError('')
-    try {
-      await axios.delete(`/api/social/integrations/${platform}`, { params: currentUserParams })
-      setConnections((items) => items.map((item) => item.platform === platform
-        ? { ...item, status: item.oauth_available ? 'not_connected' : 'configuration_required', account_name: '' }
-        : item))
-      setNotice('Stored credentials were removed. Revoke the grant from your social account settings to invalidate provider access.')
-    } catch (requestError) {
-      setError(getApiErrorMessage(requestError, 'Unable to disconnect platform.'))
-    } finally {
-      setWorking(false)
-    }
-  }
-
   const sortedMentions = useMemo(() => [...mentions].sort((a, b) => {
     const difference = new Date(a.published_at) - new Date(b.published_at)
     return mentionSort === 'oldest' ? difference : -difference
@@ -706,7 +659,7 @@ export default function SocialIntelligencePage({ section = 'overview' }) {
                 icon={Radio}
                 eyebrow="Social Media Intelligence"
                 title="Brand listening overview"
-                description="A data-backed view of mentions and customer sentiment collected for your account."
+                description="View saved mentions and sentiment, or sync recent content from connected accounts using their authorized provider APIs."
                 action={
                   <div className="flex gap-2">
                     <select aria-label="Overview period" value={rangePreset} onChange={(event) => handleRangeChange(event.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
@@ -816,7 +769,7 @@ export default function SocialIntelligencePage({ section = 'overview' }) {
                         <MentionSummary key={mention.id} mention={mention} />
                       ))}
                     </div>
-                  ) : <EmptyState title="Nothing collected yet" description="Configure your brand, then submit authorized or user-provided mentions. No sample data is shown." action={<Link className="text-xs font-semibold text-emerald-700" to="/social/mentions">Configure monitoring</Link>} />}
+                  ) : <EmptyState title="Nothing collected yet" description="Enable monitoring and sync a connected social account, or submit mentions manually. Collection is limited to content the authorized provider account can access; no sample data is shown." action={<Link className="text-xs font-semibold text-emerald-700" to="/social/mentions">Open brand mentions</Link>} />}
                 </Panel>
                 <Panel title="Latest analyzed topics" description="Topics are derived from saved Gemini mention analyses.">
                   {overviewLoading ? <LoadingState label="Loading analyzed topics…" /> : (overview?.insights || []).length ? (
@@ -831,8 +784,8 @@ export default function SocialIntelligencePage({ section = 'overview' }) {
                   ) : <EmptyState icon={Sparkles} title="Insights will appear after analysis" description="This area summarizes topics actually extracted by Gemini; it does not invent brand trends." />}
                 </Panel>
               </div>
-              <Panel className="mt-5" title="Platform connections" description="Credentials do not grant access on their own; OAuth and platform permissions are required.">
-                <ConnectionList connections={connections} onConnect={connectPlatform} onDisconnect={disconnectPlatform} working={working} />
+              <Panel className="mt-5" title="Fetch a public post" description="Paste a specific post URL. No social-account login or page scraping is used.">
+                <PublicPostFetcher currentUserParams={currentUserParams} onFetched={refreshSection} />
               </Panel>
             </>
           )}
@@ -873,9 +826,9 @@ export default function SocialIntelligencePage({ section = 'overview' }) {
 
           {section === 'mentions' && (
             <>
-              <PageTitle icon={MessageCircleMore} eyebrow="Listening workspace" title="Brand mentions" description="Maintain monitoring terms and inspect each saved mention with its collection source." action={<button type="button" onClick={() => setShowAddMention((value) => !value)} className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"><Plus className="h-4 w-4" /> Add mention</button>} />
+              <PageTitle icon={MessageCircleMore} eyebrow="Listening workspace" title="Brand mentions" description="Fetch a public post URL or add a user-submitted mention, then inspect its source and analysis." action={<button type="button" onClick={() => setShowAddMention((value) => !value)} className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"><Plus className="h-4 w-4" /> Add mention</button>} />
               <div className="mb-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
-                <Panel title="Monitoring profile" description={config?.enabled ? 'Monitoring terms are saved. Collection still requires an authorized source.' : 'Set your brand and tracking terms. Saving a profile does not connect social platforms.'} action={<button type="button" onClick={() => setShowConfig((value) => !value)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700"><Settings2 className="mr-1 inline h-3.5 w-3.5" /> {config ? 'Edit' : 'Configure'}</button>}>
+                <Panel title="Monitoring profile" description={config?.enabled ? 'Your brand name is required when fetching public post URLs.' : 'Set your brand and tracking terms. Public post URL fetching does not require social-account login.'} action={<button type="button" onClick={() => setShowConfig((value) => !value)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700"><Settings2 className="mr-1 inline h-3.5 w-3.5" /> {config ? 'Edit' : 'Configure'}</button>}>
                   {configLoading ? <LoadingState label="Loading monitoring profile…" /> : showConfig || !config ? (
                     <form onSubmit={saveConfig} className="grid gap-3 sm:grid-cols-2">
                       <label className="text-xs font-medium text-slate-600 sm:col-span-2">Brand name<input required maxLength={120} value={brandName} onChange={(event) => setBrandName(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" placeholder="Your brand" /></label>
@@ -894,8 +847,8 @@ export default function SocialIntelligencePage({ section = 'overview' }) {
                     </div>
                   )}
                 </Panel>
-                <Panel title="Connected sources" description="Only authorized provider results are labeled API-collected.">
-                  <ConnectionList connections={connections} compact onConnect={connectPlatform} onDisconnect={disconnectPlatform} working={working} />
+                <Panel title="Fetch public post URL" description="Fetch a specific public post through the platform's official API—no account login.">
+                  <PublicPostFetcher currentUserParams={currentUserParams} onFetched={refreshSection} />
                 </Panel>
               </div>
 
@@ -951,28 +904,33 @@ export default function SocialIntelligencePage({ section = 'overview' }) {
               </div>
               <Panel title="Mentions available for analysis" description="Gemini responses are schema-validated before they are stored.">
                 <div className="mb-4 flex flex-wrap gap-2"><select aria-label="Filter sentiment mentions" value={mentionSentiment} onChange={(event) => { setMentionsLoading(true); setMentionPage(1); setMentionSentiment(event.target.value) }} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs"><option value="">All analysis states</option>{sentiments.map((item) => <option key={item} value={item}>{item}</option>)}</select><select aria-label="Filter sentiment by platform" value={mentionPlatform} onChange={(event) => { setMentionsLoading(true); setMentionPage(1); setMentionPlatform(event.target.value) }} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs"><option value="">All platforms</option>{platforms.map((item) => <option key={item} value={item}>{platformLabels[item]}</option>)}</select></div>
-                {mentionsLoading ? <LoadingState label="Loading mentions…" /> : mentions.length ? <div className="space-y-3">{mentions.map((mention) => <MentionCard key={mention.id} mention={mention} onAnalyze={analyzeMention} onGenerateReplies={generateReplyOptions} onError={setError} replyDrafts={replyDrafts[mention.id]} working={working} />)}<Pagination page={mentionPage} total={mentionTotal} onChange={setMentionPage} /></div> : <EmptyState title="No mentions to analyze" description="Add an authorized or user-submitted mention in Brand Mentions first." action={<Link className="text-xs font-semibold text-emerald-700" to="/social/mentions">Open Brand Mentions</Link>} />}
+                {mentionsLoading ? <LoadingState label="Loading mentions…" /> : mentions.length ? <div className="space-y-3">{mentions.map((mention) => <MentionCard key={mention.id} mention={mention} onAnalyze={analyzeMention} onGenerateReplies={generateReplyOptions} onError={setError} replyDrafts={replyDrafts[mention.id]} working={working} />)}<Pagination page={mentionPage} total={mentionTotal} onChange={setMentionPage} /></div> : <EmptyState title="No mentions to analyze" description="Fetch a supported public post URL or add a user-submitted mention in Brand Mentions first." action={<Link className="text-xs font-semibold text-emerald-700" to="/social/mentions">Open Brand Mentions</Link>} />}
               </Panel>
             </>
           )}
 
           {section === 'competitors' && (
-            <CompetitorComparisonDashboard
-              comparisonData={competitorAnalysis}
-              loading={competitorAnalysisLoading}
-              competitors={competitors}
-              competitorsLoading={competitorsLoading}
-              onRefresh={fetchCompetitorAnalysis}
-              onAddCompetitor={saveCompetitorDirect}
-              onEditCompetitor={updateCompetitorDirect}
-              onDeleteCompetitor={deleteCompetitor}
-              working={working}
-            />
+            <>
+              <CompetitorComparisonDashboard
+                comparisonData={competitorAnalysis}
+                loading={competitorAnalysisLoading}
+                competitors={competitors}
+                competitorsLoading={competitorsLoading}
+                onRefresh={fetchCompetitorAnalysis}
+                onAddCompetitor={saveCompetitorDirect}
+                onEditCompetitor={updateCompetitorDirect}
+                onDeleteCompetitor={deleteCompetitor}
+                working={working}
+              />
+              <Panel className="mt-5" title="Public post URL support" description="YouTube and X posts can be fetched through official APIs when server-side API credentials and provider access are configured. Instagram, Facebook, and LinkedIn public URL lookups are not available through this app's public API access. No login or scraping is used.">
+                <PublicPostFetcher currentUserParams={currentUserParams} onFetched={refreshSection} />
+              </Panel>
+            </>
           )}
 
           {section === 'alerts' && (
             <>
-              <PageTitle icon={BellRing} eyebrow="Reputation watch" title="Intelligent alerts" description="Alerts are created from saved mention data and transparent thresholds. No background platform polling is active until official connections are implemented." action={<div className="flex gap-2"><select aria-label="Filter alerts by severity" value={alertSeverity} onChange={(event) => { setAlertsLoading(true); setAlertSeverity(event.target.value) }} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"><option value="">All severities</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select><select aria-label="Filter read alerts" value={unreadOnly ? 'unread' : 'all'} onChange={(event) => { setAlertsLoading(true); setUnreadOnly(event.target.value === 'unread') }} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"><option value="all">Read and unread</option><option value="unread">Unread only</option></select></div>} />
+              <PageTitle icon={BellRing} eyebrow="Reputation watch" title="Intelligent alerts" description="Alerts are created from saved mention data and transparent thresholds. Public URLs are fetched only on demand; no background platform polling is active." action={<div className="flex gap-2"><select aria-label="Filter alerts by severity" value={alertSeverity} onChange={(event) => { setAlertsLoading(true); setAlertSeverity(event.target.value) }} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"><option value="">All severities</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select><select aria-label="Filter read alerts" value={unreadOnly ? 'unread' : 'all'} onChange={(event) => { setAlertsLoading(true); setUnreadOnly(event.target.value === 'unread') }} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"><option value="all">Read and unread</option><option value="unread">Unread only</option></select></div>} />
               <div className="mb-5 grid gap-3 sm:grid-cols-3">
                 <MetricCard label="Open alerts" value={alerts.filter((item) => !item.read).length} detail="Unread alerts in the current result set" icon={BellRing} tint="amber" />
                 <MetricCard label="High severity" value={alerts.filter((item) => item.severity === 'high' || item.severity === 'critical').length} detail="Requires prompt review" icon={ShieldAlert} tint="rose" />
@@ -993,40 +951,62 @@ function TermField({ label, value, onChange, placeholder }) {
   return <label className="text-xs font-medium text-slate-600">{label}<input maxLength={2000} value={value} onChange={(event) => onChange(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" placeholder={placeholder} /><span className="mt-1 block font-normal text-slate-400">Separate terms with commas.</span></label>
 }
 
-function ConnectionList({ connections = [], compact = false, onConnect, onDisconnect, working = false }) {
-  if (!connections.length) return <p className="text-xs text-slate-500">Loading provider status…</p>
+function PublicPostFetcher({ currentUserParams, onFetched }) {
+  const [url, setUrl] = useState('')
+  const [working, setWorking] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+
+  const fetchPost = async (event) => {
+    event.preventDefault()
+    setWorking(true)
+    setMessage('')
+    setError('')
+    try {
+      const { data } = await axios.post(
+        '/api/social/public-posts/fetch',
+        { url },
+        { params: currentUserParams },
+      )
+      setMessage(`${data.message} ${data.collection_scope || ''}`.trim())
+      setUrl('')
+      onFetched?.()
+    } catch (requestError) {
+      setError(getApiErrorMessage(requestError, 'Unable to fetch this public post.'))
+    } finally {
+      setWorking(false)
+    }
+  }
+
   return (
-    <div className={compact ? 'space-y-2' : 'grid gap-3 sm:grid-cols-2 xl:grid-cols-3'}>
-      {connections.map((connection) => (
-        <div key={connection.platform} className="rounded-xl border border-slate-100 bg-white/70 p-3">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-sm font-semibold text-slate-800">{connection.name}</p>
-            <span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${
-              connection.status === 'connected'
-                ? 'bg-emerald-50 text-emerald-700'
-                : connection.status === 'reauth_required'
-                  ? 'bg-rose-50 text-rose-700'
-                  : 'bg-amber-50 text-amber-700'
-            }`}>
-              {connection.status === 'connected'
-                ? `Connected${connection.account_name ? ` · ${connection.account_name}` : ''}`
-                : connection.status === 'reauth_required'
-                  ? 'Reconnect required'
-                  : connection.status === 'not_connected' ? 'Not connected' : 'Setup required'}
-            </span>
-          </div>
-          {!compact && <p className="mt-1 text-xs leading-5 text-slate-500">{connection.setup_requirements}</p>}
-          <p className="mt-1 text-[10px] text-slate-400">{connection.credentials_configured ? 'Developer credentials configured; OAuth consent is still required.' : 'Developer credentials are not configured.'}</p>
-          {(connection.oauth_available || connection.status === 'connected' || connection.status === 'reauth_required') && (
-            <div className="mt-2 flex gap-2">
-              {connection.oauth_available && connection.status !== 'connected' && <button type="button" disabled={working} onClick={() => onConnect?.(connection.platform)} className="rounded-lg bg-slate-900 px-2.5 py-1.5 text-[10px] font-semibold text-white disabled:opacity-50">{connection.status === 'reauth_required' ? 'Reconnect' : 'Connect account'}</button>}
-              {(connection.status === 'connected' || connection.status === 'reauth_required') && <button type="button" disabled={working} onClick={() => onDisconnect?.(connection.platform)} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[10px] font-semibold text-slate-600 disabled:opacity-50">Disconnect</button>}
-            </div>
-          )}
-        </div>
-      ))}
-    </div>
+    <form onSubmit={fetchPost} className="space-y-3">
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <input
+          required
+          type="url"
+          maxLength={2048}
+          value={url}
+          onChange={(event) => setUrl(event.target.value)}
+          className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm"
+          placeholder="https://youtu.be/... or https://x.com/.../status/..."
+          aria-label="Public social post URL"
+        />
+        <button type="submit" disabled={working || !url.trim()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
+          {working ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ArrowUpRight className="h-4 w-4" />}
+          {working ? 'Fetching…' : 'Fetch post'}
+        </button>
+      </div>
+      <p className="text-xs leading-5 text-slate-500">Currently supports YouTube and X public post URLs using YOUTUBE_API_KEY and X_BEARER_TOKEN configured on the backend. Instagram, Facebook, and LinkedIn URL fetches are reported as unsupported; no social login or scraping is attempted.</p>
+      {error && <p role="alert" className="rounded-lg bg-rose-50 p-3 text-xs text-rose-800">{error}</p>}
+      {message && <p role="status" className="rounded-lg bg-emerald-50 p-3 text-xs text-emerald-800">{message}</p>}
+    </form>
   )
+}
+
+function collectionSourceLabel(source) {
+  if (source === 'user_submitted') return 'User-submitted'
+  if (source === 'public_api') return 'Public API'
+  return 'Authorized API'
 }
 
 function MentionSummary({ mention }) {
@@ -1037,7 +1017,7 @@ function MentionSummary({ mention }) {
         <span className={`rounded-full px-2 py-1 text-[10px] font-semibold capitalize ${sentimentClass(mention.sentiment)}`}>{mention.sentiment}</span>
       </div>
       <p className="mt-2 line-clamp-2 text-sm text-slate-700">{mention.content}</p>
-      <div className="mt-2 flex items-center justify-between text-[10px] text-slate-400"><span>{mention.collection_source === 'user_submitted' ? 'User-submitted' : 'Authorized API'}</span><span>{displayDate(mention.published_at)}</span></div>
+      <div className="mt-2 flex items-center justify-between text-[10px] text-slate-400"><span>{collectionSourceLabel(mention.collection_source)}</span><span>{displayDate(mention.published_at)}</span></div>
     </div>
   )
 }
@@ -1052,7 +1032,7 @@ function MentionCard({ mention, onAnalyze, onGenerateReplies, onError, replyDraf
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">{platformLabels[mention.platform] || mention.platform}</span>
             <span className={`rounded-full px-2 py-1 text-[10px] font-semibold capitalize ${sentimentClass(mention.sentiment)}`}>{mention.sentiment}</span>
-            <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-semibold text-blue-700">{mention.collection_source === 'user_submitted' ? 'User-submitted data' : 'Authorized API data'}</span>
+            <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-semibold text-blue-700">{collectionSourceLabel(mention.collection_source)}</span>
             <span className="text-[11px] text-slate-400">about {mention.entity_name}</span>
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500"><span>{mention.author || 'Author unavailable'}</span><span>{displayDate(mention.published_at)}</span></div>

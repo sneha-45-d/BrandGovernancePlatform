@@ -197,14 +197,16 @@ export default function ContentAnalysisPage() {
         clash_report: response.data.clash_report || response.data.analysis?.clash_report,
         champion_update: response.data.champion_update,
       }
+      const sourceText = response.data.source_text ?? content
 
       setAnalysis(analysisResult)
+      setContent(sourceText)
       setActiveReportId(response.data.report_id || null)
       const localEntry = saveLocalAnalysis({
         reportId: response.data.report_id,
         title: selectedFile ? selectedFile.name : 'Marketing copy review',
         brandName: guidelines.brand_name,
-        content,
+        content: sourceText,
         analysis: analysisResult,
       })
       setHistory((current) => [
@@ -218,7 +220,7 @@ export default function ContentAnalysisPage() {
       if (response.data.report_id) {
         void fetchHistory()
       }
-      localStorage.setItem(getUserStorageKey('brandithm-analysis-content'), content)
+      localStorage.setItem(getUserStorageKey('brandithm-analysis-content'), sourceText)
     } catch (requestError) {
       setError(getApiErrorMessage(
         requestError,
@@ -236,6 +238,7 @@ export default function ContentAnalysisPage() {
       })
       setAnalysis(response.data.analysis)
       setContent(response.data.content || '')
+      setSelectedFile(null)
       setActiveReportId(reportId)
       setError('')
     } catch (requestError) {
@@ -259,13 +262,23 @@ export default function ContentAnalysisPage() {
   }
 
   const handleSendToCorrection = () => {
-    if (!content.trim()) {
+    if (!content.trim() && !selectedFile) {
       setError('Add content to the analyzer before sending it to AI Correction.')
       return
     }
 
     localStorage.setItem(getUserStorageKey('brandithm-correction-content'), content)
-    navigate('/ai-correction')
+    navigate('/ai-correction', {
+      state: {
+        content,
+        file: selectedFile,
+        analysisContext: {
+          summary: analysis?.summary || '',
+          violations: analysis?.violations || [],
+          recommendations: analysis?.recommendations || [],
+        },
+      },
+    })
   }
 
   return (
