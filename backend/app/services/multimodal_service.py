@@ -1,11 +1,14 @@
+import asyncio
 import logging
 import os
 import tempfile
 import time
 from pathlib import Path
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
+from app.config import settings
 from app.services.content_ingestion import MediaFile
 
 logger = logging.getLogger(__name__)
@@ -19,12 +22,17 @@ class MultimodalAnalysisError(Exception):
 
 def _state_name(file_object) -> str:
     try:
-        return genai.protos.File.State(file_object.state).name
-    except (AttributeError, TypeError, ValueError):
-        return str(file_object.state)
+        return str(getattr(file_object, 'state', file_object)).upper()
+    except Exception:
+        return 'UNKNOWN'
 
 
-def _generate(model_name: str, prompt: str, media_files: list[MediaFile]) -> str:
+def _generate(model_name: str, prompt: str, media_files: list[MediaFile], api_key: str | None = None) -> str:
+    key = api_key or settings.GEMINI_API_KEY
+    if not key:
+        raise MultimodalAnalysisError('Gemini API key is not configured.')
+
+    client = genai.Client(api_key=key)
     uploaded_files = []
     temporary_paths = []
     try:
@@ -41,33 +49,35 @@ def _generate(model_name: str, prompt: str, media_files: list[MediaFile]) -> str
             finally:
                 handle.close()
 
-            uploaded = genai.upload_file(
-                path=handle.name,
-                mime_type=media.mime_type,
-                display_name=f'Brandithm upload {index}{suffix}',
+            uploaded = client.files.upload(
+                file=handle.name,
+                config=types.UploadFileConfig(
+                    mime_type=media.mime_type,
+                    display_name=f'Brandithm upload {index}{suffix}',
+                ),
             )
             uploaded_files.append(uploaded)
 
             deadline = time.monotonic() + FILE_PROCESSING_TIMEOUT_SECONDS
             state = _state_name(uploaded)
-            while state == 'PROCESSING' and time.monotonic() < deadline:
+            while 'PROCESSING' in state and time.monotonic() < deadline:
                 time.sleep(FILE_PROCESSING_POLL_SECONDS)
-                uploaded = genai.get_file(uploaded.name)
+                uploaded = client.files.get(name=uploaded.name)
                 uploaded_files[-1] = uploaded
                 state = _state_name(uploaded)
-            if state == 'FAILED':
+            if 'FAILED' in state:
                 raise MultimodalAnalysisError('Gemini could not process one of the uploaded media files.')
-            if state != 'ACTIVE':
+            if 'ACTIVE' not in state:
                 raise MultimodalAnalysisError('Gemini media processing did not finish in time.')
 
-        model = genai.GenerativeModel(model_name)
-        response = model.generate_content(
-            [prompt, *uploaded_files],
-            generation_config={
-                'temperature': 0.2,
-                'response_mime_type': 'application/json',
-                'max_output_tokens': 2048,
-            },
+        response = client.models.generate_content(
+            model=model_name,
+            contents=[prompt, *uploaded_files],
+            config=types.GenerateContentConfig(
+                temperature=0.2,
+                response_mime_type='application/json',
+                max_output_tokens=2048,
+            ),
         )
         if not response.text:
             raise MultimodalAnalysisError('Gemini returned an empty media analysis.')
@@ -80,9 +90,9 @@ def _generate(model_name: str, prompt: str, media_files: list[MediaFile]) -> str
     finally:
         for uploaded in uploaded_files:
             try:
-                genai.delete_file(uploaded.name)
+                client.files.delete(name=uploaded.name)
             except Exception:
-                logger.exception('Unable to delete temporary Gemini upload %s', uploaded.name)
+                logger.exception('Unable to delete temporary Gemini upload %s', getattr(uploaded, 'name', 'unknown'))
         for path in temporary_paths:
             try:
                 os.remove(path)
@@ -94,7 +104,6 @@ async def generate_multimodal_content(
     model_name: str,
     prompt: str,
     media_files: list[MediaFile],
+    api_key: str | None = None,
 ) -> str:
-    import asyncio
-
-    return await asyncio.to_thread(_generate, model_name, prompt, media_files)
+    return await asyncio.to_thread(_generate, model_name, prompt, media_files, api_key)

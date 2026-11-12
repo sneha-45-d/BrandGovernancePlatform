@@ -5,7 +5,7 @@ from io import BytesIO
 from pathlib import Path
 from zipfile import BadZipFile, ZipFile
 
-import fitz
+import pymupdf as fitz
 from docx import Document
 from docx.opc.exceptions import PackageNotFoundError
 from fastapi import HTTPException

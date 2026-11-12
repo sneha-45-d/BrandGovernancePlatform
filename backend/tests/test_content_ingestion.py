@@ -3,10 +3,9 @@ import unittest
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from zipfile import ZIP_DEFLATED, ZipFile
 
-import google.generativeai as genai
 from fastapi import HTTPException
 from PIL import Image
 
@@ -89,23 +88,31 @@ class ContentIngestionTests(unittest.TestCase):
     def test_multimodal_uploads_are_deleted_after_generation(self):
         uploaded = SimpleNamespace(
             name='files/test-upload',
-            state=genai.protos.File.State.ACTIVE,
+            state='ACTIVE',
         )
         response = SimpleNamespace(text='{"overall_score": 90}')
         media = MediaFile('creative.png', 'image/png', b'image-bytes')
 
-        with patch('app.services.multimodal_service.genai.upload_file', return_value=uploaded) as upload_file, \
-             patch('app.services.multimodal_service.genai.delete_file') as delete_file, \
-             patch('app.services.multimodal_service.genai.GenerativeModel') as model:
-            model.return_value.generate_content.return_value = response
+        mock_client = SimpleNamespace()
+        mock_client.files = SimpleNamespace(
+            upload=MagicMock(return_value=uploaded),
+            get=MagicMock(return_value=uploaded),
+            delete=MagicMock(),
+        )
+        mock_client.models = SimpleNamespace(
+            generate_content=MagicMock(return_value=response),
+        )
+
+        with patch('app.services.multimodal_service.genai.Client', return_value=mock_client), \
+             patch('app.services.multimodal_service.settings.GEMINI_API_KEY', 'test-key'):
             result = asyncio.run(generate_multimodal_content('gemini-test', 'Analyze asset', [media]))
 
         self.assertEqual(result, response.text)
-        self.assertEqual(upload_file.call_count, 1)
-        uploaded_path = Path(upload_file.call_args.kwargs['path'])
+        self.assertEqual(mock_client.files.upload.call_count, 1)
+        uploaded_path = Path(mock_client.files.upload.call_args.kwargs['file'])
         self.assertFalse(uploaded_path.exists())
-        delete_file.assert_called_once_with(uploaded.name)
-        model.return_value.generate_content.assert_called_once()
+        mock_client.files.delete.assert_called_once_with(name=uploaded.name)
+        mock_client.models.generate_content.assert_called_once()
 
     def test_media_analysis_requires_a_gemini_key_instead_of_falling_back(self):
         media = [MediaFile('creative.png', 'image/png', b'image-bytes')]

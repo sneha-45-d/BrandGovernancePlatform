@@ -34,7 +34,7 @@ def _clean_document(document):
         return None
     result = dict(document)
     result.pop('_id', None)
-    for key in ('keywords', 'hashtags', 'product_names', 'sentiment_data', 'engagement', 'scopes', 'drafts'):
+    for key in ('keywords', 'hashtags', 'product_names', 'sentiment_data', 'engagement', 'scopes', 'drafts', 'metrics', 'audit_result'):
         if key in result:
             result[key] = _decode_json(result[key], [] if key in {'keywords', 'hashtags', 'product_names', 'scopes'} else {})
     if 'enabled' in result:
@@ -62,6 +62,8 @@ def _ensure_indexes():
     db['social_alerts'].create_index([('user_id', 1), ('trigger_key', 1)], unique=True)
     db['social_monitoring_config'].create_index('user_id', unique=True)
     db['social_oauth_states'].create_index('expires_at', expireAfterSeconds=0)
+    db['social_posts'].create_index([('user_id', 1), ('platform', 1), ('external_id', 1)], unique=True)
+    db['social_posts'].create_index([('user_id', 1), ('published_at', -1)])
     _mongo_indexes_ready = True
 
 
@@ -781,3 +783,265 @@ def disconnect_social_account(user_id, platform):
         return result.rowcount > 0
 
     return _try_mongo(mongo, local)
+
+
+def get_social_account_raw(user_id, platform):
+    def mongo():
+        return _clean_document(get_db()['social_accounts'].find_one({'user_id': user_id, 'platform': platform}))
+
+    def local():
+        with local_store._connect() as connection:
+            row = connection.execute(
+                'SELECT * FROM social_accounts WHERE user_id = ? AND platform = ?',
+                (user_id, platform),
+            ).fetchone()
+        return _clean_document(dict(row)) if row else None
+
+    return _try_mongo(mongo, local)
+
+
+def save_post(user_id, post_dict):
+    now = _now()
+    post_id = post_dict.get('id') or f"post_{uuid4().hex[:16]}"
+    platform = post_dict['platform']
+    external_id = str(post_dict['external_id'])
+    caption = post_dict.get('caption', '')
+    media_url = post_dict.get('media_url', '')
+    media_type = post_dict.get('media_type', 'text')
+    permalink = post_dict.get('permalink', '')
+    published_at = post_dict.get('published_at', now)
+    metrics = post_dict.get('metrics', {})
+    audit_status = post_dict.get('audit_status', 'unaudited')
+    audit_result = post_dict.get('audit_result', {})
+
+    document = {
+        'id': post_id,
+        'user_id': user_id,
+        'platform': platform,
+        'external_id': external_id,
+        'caption': caption,
+        'media_url': media_url,
+        'media_type': media_type,
+        'permalink': permalink,
+        'published_at': published_at,
+        'metrics': metrics,
+        'audit_status': audit_status,
+        'audit_result': audit_result,
+        'created_at': now,
+        'updated_at': now,
+    }
+
+    def mongo():
+        col = get_db()['social_posts']
+        col.update_one(
+            {'user_id': user_id, 'platform': platform, 'external_id': external_id},
+            {
+                '$set': {
+                    'caption': caption,
+                    'media_url': media_url,
+                    'media_type': media_type,
+                    'permalink': permalink,
+                    'published_at': published_at,
+                    'metrics': metrics,
+                    'updated_at': now,
+                },
+                '$setOnInsert': {
+                    'id': post_id,
+                    'user_id': user_id,
+                    'platform': platform,
+                    'external_id': external_id,
+                    'audit_status': audit_status,
+                    'audit_result': audit_result,
+                    'created_at': now,
+                },
+            },
+            upsert=True,
+        )
+        saved = col.find_one({'user_id': user_id, 'platform': platform, 'external_id': external_id})
+        return _clean_document(saved)
+
+    def local():
+        with local_store._connect() as connection:
+            existing = connection.execute(
+                'SELECT id, audit_status, audit_result, created_at FROM social_posts WHERE user_id = ? AND platform = ? AND external_id = ?',
+                (user_id, platform, external_id),
+            ).fetchone()
+            if existing:
+                actual_id = existing['id']
+                actual_status = existing['audit_status']
+                actual_result = existing['audit_result']
+                created = existing['created_at']
+                connection.execute(
+                    '''UPDATE social_posts SET
+                        caption = ?, media_url = ?, media_type = ?, permalink = ?,
+                        published_at = ?, metrics = ?, updated_at = ?
+                       WHERE id = ?''',
+                    (
+                        caption, media_url, media_type, permalink,
+                        published_at, json.dumps(metrics), now, actual_id,
+                    ),
+                )
+                return {
+                    'id': actual_id,
+                    'user_id': user_id,
+                    'platform': platform,
+                    'external_id': external_id,
+                    'caption': caption,
+                    'media_url': media_url,
+                    'media_type': media_type,
+                    'permalink': permalink,
+                    'published_at': published_at,
+                    'metrics': metrics,
+                    'audit_status': actual_status,
+                    'audit_result': _decode_json(actual_result, {}),
+                    'created_at': created,
+                    'updated_at': now,
+                }
+            else:
+                connection.execute(
+                    '''INSERT INTO social_posts
+                       (id, user_id, platform, external_id, caption, media_url, media_type,
+                        permalink, published_at, metrics, audit_status, audit_result, created_at, updated_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                    (
+                        post_id, user_id, platform, external_id, caption, media_url, media_type,
+                        permalink, published_at, json.dumps(metrics), audit_status,
+                        json.dumps(audit_result), now, now,
+                    ),
+                )
+                return document
+
+    return _try_mongo(mongo, local)
+
+
+def list_posts(user_id, platform=None, audit_status=None, limit=50, offset=0):
+    def mongo():
+        query = {'user_id': user_id}
+        if platform:
+            query['platform'] = platform
+        if audit_status:
+            query['audit_status'] = audit_status
+        cursor = get_db()['social_posts'].find(query).sort('published_at', -1).skip(offset).limit(limit)
+        return [_clean_document(item) for item in cursor]
+
+    def local():
+        clauses = ['user_id = ?']
+        params = [user_id]
+        if platform:
+            clauses.append('platform = ?')
+            params.append(platform)
+        if audit_status:
+            clauses.append('audit_status = ?')
+            params.append(audit_status)
+        sql = f"SELECT * FROM social_posts WHERE {' AND '.join(clauses)} ORDER BY published_at DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+        with local_store._connect() as connection:
+            rows = connection.execute(sql, tuple(params)).fetchall()
+        return [_clean_document(dict(row)) for row in rows]
+
+    return _try_mongo(mongo, local)
+
+
+def count_posts(user_id, platform=None, audit_status=None):
+    def mongo():
+        query = {'user_id': user_id}
+        if platform:
+            query['platform'] = platform
+        if audit_status:
+            query['audit_status'] = audit_status
+        return get_db()['social_posts'].count_documents(query)
+
+    def local():
+        clauses = ['user_id = ?']
+        params = [user_id]
+        if platform:
+            clauses.append('platform = ?')
+            params.append(platform)
+        if audit_status:
+            clauses.append('audit_status = ?')
+            params.append(audit_status)
+        sql = f"SELECT COUNT(*) as count FROM social_posts WHERE {' AND '.join(clauses)}"
+        with local_store._connect() as connection:
+            row = connection.execute(sql, tuple(params)).fetchone()
+        return int(row['count']) if row else 0
+
+    return _try_mongo(mongo, local)
+
+
+def get_post(user_id, post_id):
+    def mongo():
+        return _clean_document(get_db()['social_posts'].find_one({'user_id': user_id, 'id': post_id}))
+
+    def local():
+        with local_store._connect() as connection:
+            row = connection.execute(
+                'SELECT * FROM social_posts WHERE user_id = ? AND id = ?',
+                (user_id, post_id),
+            ).fetchone()
+        return _clean_document(dict(row)) if row else None
+
+    return _try_mongo(mongo, local)
+
+
+def update_post_audit(user_id, post_id, audit_result, audit_status='audited'):
+    now = _now()
+
+    def mongo():
+        res = get_db()['social_posts'].update_one(
+            {'user_id': user_id, 'id': post_id},
+            {'$set': {'audit_result': audit_result, 'audit_status': audit_status, 'updated_at': now}},
+        )
+        return res.modified_count > 0 or res.matched_count > 0
+
+    def local():
+        with local_store._connect() as connection:
+            res = connection.execute(
+                'UPDATE social_posts SET audit_result = ?, audit_status = ?, updated_at = ? WHERE user_id = ? AND id = ?',
+                (json.dumps(audit_result), audit_status, now, user_id, post_id),
+            )
+        return res.rowcount > 0
+
+    return _try_mongo(mongo, local)
+
+
+def get_audit_summary(user_id):
+    posts = list_posts(user_id, limit=500)
+    total_posts = len(posts)
+    audited_posts = [p for p in posts if p.get('audit_status') == 'audited']
+    unaudited_count = total_posts - len(audited_posts)
+
+    scores = []
+    critical_count = 0
+    high_count = 0
+    safe_count = 0
+    violations_by_category = {}
+
+    for p in audited_posts:
+        audit = p.get('audit_result') or {}
+        score = audit.get('safety_score')
+        if isinstance(score, (int, float)):
+            scores.append(score)
+        risk = (audit.get('risk_level') or 'safe').lower()
+        if risk == 'critical':
+            critical_count += 1
+        elif risk == 'high':
+            high_count += 1
+        elif risk == 'safe':
+            safe_count += 1
+
+        for v in audit.get('violations') or []:
+            cat = v.get('category', 'other')
+            violations_by_category[cat] = violations_by_category.get(cat, 0) + 1
+
+    avg_score = round(sum(scores) / len(scores), 1) if scores else 100.0
+
+    return {
+        'total_posts': total_posts,
+        'audited_count': len(audited_posts),
+        'unaudited_count': unaudited_count,
+        'average_safety_score': avg_score,
+        'critical_count': critical_count,
+        'high_count': high_count,
+        'safe_count': safe_count,
+        'violations_by_category': violations_by_category,
+    }

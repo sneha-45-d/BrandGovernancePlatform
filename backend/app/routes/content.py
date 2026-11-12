@@ -6,10 +6,10 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import Literal
 
-import google.generativeai as genai
 from bson import ObjectId
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
-from google.api_core import exceptions as google_exceptions
+from google import genai
+from google.genai import types
 from pydantic import BaseModel, Field
 from pymongo.errors import PyMongoError
 
@@ -318,22 +318,24 @@ Rules:
     ]))
 
     last_error = None
+    client = genai.Client(api_key=api_key)
     for model_name in filter(None, models_to_try):
         try:
-            genai.configure(api_key=api_key)
             if media_files:
-                raw_response = await generate_multimodal_content(model_name, prompt, media_files)
+                raw_response = await generate_multimodal_content(model_name, prompt, media_files, api_key=api_key)
             else:
-                model = genai.GenerativeModel(model_name)
-                response = await asyncio.to_thread(
-                    model.generate_content,
-                    prompt,
-                    generation_config={
-                        'temperature': 0.2,
-                        'response_mime_type': 'application/json',
-                        'max_output_tokens': 2048,
-                    },
-                )
+                def _call_gemini():
+                    return client.models.generate_content(
+                        model=model_name,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            temperature=0.2,
+                            response_mime_type='application/json',
+                            max_output_tokens=2048,
+                        ),
+                    )
+
+                response = await asyncio.to_thread(_call_gemini)
                 raw_response = response.text
             parsed = parse_ai_json_response(raw_response)
             tone_report = parsed.get('tone_analysis')
@@ -417,21 +419,23 @@ Rules:
     ]
 
     last_error = None
+    client = genai.Client(api_key=api_key)
     for model_name in models_to_try:
         if not model_name:
             continue
         try:
-            genai.configure(api_key=api_key)
-            model = genai.GenerativeModel(model_name)
-            response = await asyncio.to_thread(
-                model.generate_content,
-                prompt,
-                generation_config={
-                    'temperature': 0.25,
-                    'response_mime_type': 'application/json',
-                    'max_output_tokens': 2048,
-                },
-            )
+            def _call_correction():
+                return client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=0.25,
+                        response_mime_type='application/json',
+                        max_output_tokens=2048,
+                    ),
+                )
+
+            response = await asyncio.to_thread(_call_correction)
             parsed = parse_ai_json_response(response.text)
 
             return {

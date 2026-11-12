@@ -11,8 +11,12 @@ from pydantic import BaseModel, Field, field_validator
 from app.config import settings
 from app.database import social_store
 from app.security import get_authenticated_user, verify_user_scope
+from app.services import competitor_analyzer
+from app.services import platform_fetcher
+from app.services import post_auditor
 from app.services import social_intelligence
 from app.services import social_oauth
+from app.services import strategy_engine
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -103,6 +107,16 @@ class CompetitorInput(BaseModel):
 
 class AlertReadInput(BaseModel):
     read: bool
+
+
+class CreatePostInput(BaseModel):
+    user_id: str | None = None
+    platform: Literal['instagram', 'facebook', 'youtube', 'x', 'linkedin', 'manual'] = 'x'
+    caption: str = Field(min_length=1, max_length=10_000)
+    media_url: str = Field(default='', max_length=2048)
+    media_type: str = Field(default='text', max_length=50)
+    permalink: str = Field(default='', max_length=2048)
+    auto_audit: bool = True
 
 
 @router.get('/social/overview')
@@ -472,3 +486,166 @@ def disconnect_social_platform(
     return {
         'message': 'Stored platform tokens were removed. Revoke the Brandithm grant in the platform account settings to invalidate provider-side access.',
     }
+
+
+@router.post('/social/integrations/{platform}/sync')
+async def sync_platform(
+    platform: str,
+    user_id: str | None = Query(default=None),
+    current_user: dict = Depends(get_authenticated_user),
+):
+    scoped_user_id = verify_user_scope(current_user, user_id)
+    if platform not in social_oauth.PROVIDER_AUTH_URLS:
+        raise HTTPException(status_code=404, detail='This social platform is not supported.')
+    res = await platform_fetcher.sync_platform_posts(scoped_user_id, platform)
+    return res
+
+
+@router.get('/social/posts')
+def list_social_posts(
+    platform: str | None = Query(default=None, pattern='^(instagram|facebook|youtube|x|linkedin|manual)$'),
+    audit_status: str | None = Query(default=None, pattern='^(audited|unaudited)$'),
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=20, ge=1, le=100),
+    user_id: str | None = Query(default=None),
+    current_user: dict = Depends(get_authenticated_user),
+):
+    scoped_user_id = verify_user_scope(current_user, user_id)
+    posts = _storage_call(lambda: social_store.list_posts(
+        scoped_user_id,
+        platform=platform,
+        audit_status=audit_status,
+        limit=per_page,
+        offset=(page - 1) * per_page,
+    ))
+    total = _storage_call(lambda: social_store.count_posts(
+        scoped_user_id,
+        platform=platform,
+        audit_status=audit_status,
+    ))
+    return {
+        'posts': posts,
+        'page': page,
+        'per_page': per_page,
+        'total': total,
+        'pages': (total + per_page - 1) // per_page if per_page else 1,
+    }
+
+
+@router.post('/social/posts', status_code=201)
+async def create_social_post(
+    payload: CreatePostInput,
+    current_user: dict = Depends(get_authenticated_user),
+):
+    scoped_user_id = verify_user_scope(current_user, payload.user_id)
+    post_dict = {
+        'platform': payload.platform,
+        'external_id': f"manual_{int(datetime.now(timezone.utc).timestamp())}",
+        'caption': payload.caption,
+        'media_url': payload.media_url,
+        'media_type': payload.media_type,
+        'permalink': payload.permalink,
+        'published_at': datetime.now(timezone.utc).isoformat(),
+        'metrics': {},
+        'audit_status': 'unaudited',
+    }
+    saved = _storage_call(lambda: social_store.save_post(scoped_user_id, post_dict))
+
+    if payload.auto_audit:
+        try:
+            audit_res = await post_auditor.audit_and_save_post(scoped_user_id, saved['id'])
+            saved['audit_result'] = audit_res['audit_result']
+            saved['audit_status'] = 'audited'
+        except Exception as exc:
+            logger.warning('Auto-audit failed for post %s: %s', saved['id'], exc)
+
+    return {
+        'message': 'Post created and processed.',
+        'post': saved,
+    }
+
+
+@router.get('/social/posts/audit-summary')
+def get_posts_audit_summary(
+    user_id: str | None = Query(default=None),
+    current_user: dict = Depends(get_authenticated_user),
+):
+    scoped_user_id = verify_user_scope(current_user, user_id)
+    summary = _storage_call(lambda: social_store.get_audit_summary(scoped_user_id))
+    return summary
+
+
+@router.get('/social/posts/{post_id}')
+def get_single_social_post(
+    post_id: str,
+    user_id: str | None = Query(default=None),
+    current_user: dict = Depends(get_authenticated_user),
+):
+    scoped_user_id = verify_user_scope(current_user, user_id)
+    post = _storage_call(lambda: social_store.get_post(scoped_user_id, post_id))
+    if not post:
+        raise HTTPException(status_code=404, detail='Post not found.')
+    return {'post': post}
+
+
+@router.post('/social/posts/{post_id}/audit')
+async def audit_single_post(
+    post_id: str,
+    user_id: str | None = Query(default=None),
+    current_user: dict = Depends(get_authenticated_user),
+):
+    scoped_user_id = verify_user_scope(current_user, user_id)
+    post = _storage_call(lambda: social_store.get_post(scoped_user_id, post_id))
+    if not post:
+        raise HTTPException(status_code=404, detail='Post not found.')
+    try:
+        result = await post_auditor.audit_and_save_post(scoped_user_id, post_id)
+        return {
+            'message': 'Post audit completed successfully.',
+            'post_id': post_id,
+            'audit_result': result['audit_result'],
+        }
+    except Exception as exc:
+        logger.exception('Post audit failed for %s', post_id)
+        raise HTTPException(status_code=500, detail=f"Audit failed: {str(exc)}") from exc
+
+
+@router.post('/social/posts/bulk-audit')
+async def bulk_audit_posts(
+    user_id: str | None = Query(default=None),
+    current_user: dict = Depends(get_authenticated_user),
+):
+    scoped_user_id = verify_user_scope(current_user, user_id)
+    posts = _storage_call(lambda: social_store.list_posts(scoped_user_id, audit_status='unaudited', limit=20))
+    audited = []
+    for p in posts:
+        try:
+            res = await post_auditor.audit_and_save_post(scoped_user_id, p['id'])
+            audited.append(res)
+        except Exception as exc:
+            logger.warning('Failed bulk audit for %s: %s', p['id'], exc)
+    return {
+        'message': f"Audited {len(audited)} posts.",
+        'audited_count': len(audited),
+    }
+
+
+@router.get('/social/strategy-recommendations')
+async def get_strategy_recommendations(
+    user_id: str | None = Query(default=None),
+    current_user: dict = Depends(get_authenticated_user),
+):
+    scoped_user_id = verify_user_scope(current_user, user_id)
+    recommendations = await strategy_engine.generate_strategy_recommendations(scoped_user_id)
+    return recommendations
+
+
+@router.get('/social/competitor-analysis')
+async def get_competitor_analysis(
+    user_id: str | None = Query(default=None),
+    current_user: dict = Depends(get_authenticated_user),
+):
+    scoped_user_id = verify_user_scope(current_user, user_id)
+    analysis = await competitor_analyzer.analyze_competitors(scoped_user_id)
+    return analysis
+

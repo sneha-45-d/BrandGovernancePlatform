@@ -16,8 +16,7 @@ import LeaderboardPage from './pages/LeaderboardPage'
 import VisualCheckPage from './pages/VisualCheckPage'
 import LandingPage from './pages/LandingPage'
 import SocialIntelligencePage from './pages/SocialIntelligencePage'
-import { AuthProvider } from './lib/AuthContext'
-import { useAuth } from './lib/auth-context'
+import { AuthProvider, useAuth } from './lib/AuthContext'
 
 function RequireAuth() {
   const { user, isLoading } = useAuth()
@@ -66,12 +65,16 @@ function AppShell() {
           <Route path="/leaderboard" element={<LeaderboardPage />} />
           <Route path="/visual-check" element={<VisualCheckPage />} />
           <Route path="/settings" element={<AccountSettingsPage />} />
+          <Route path="/social" element={<Navigate to="/social/overview" replace />} />
           <Route path="/social/overview" element={<SocialIntelligencePage key="overview" section="overview" />} />
+          <Route path="/social/audit" element={<SocialIntelligencePage key="audit" section="audit" />} />
+          <Route path="/social/strategy" element={<SocialIntelligencePage key="strategy" section="strategy" />} />
           <Route path="/social/mentions" element={<SocialIntelligencePage key="mentions" section="mentions" />} />
           <Route path="/social/sentiment" element={<SocialIntelligencePage key="sentiment" section="sentiment" />} />
           <Route path="/social/competitors" element={<SocialIntelligencePage key="competitors" section="competitors" />} />
           <Route path="/social/alerts" element={<SocialIntelligencePage key="alerts" section="alerts" />} />
         </Route>
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </>
   )

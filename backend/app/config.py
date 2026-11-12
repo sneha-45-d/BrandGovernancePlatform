@@ -14,7 +14,9 @@ class Settings:
     MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017')
     DB_NAME = os.getenv('DB_NAME', 'brandithm')
     FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173').rstrip('/')
-    LOCAL_DB_PATH = os.getenv('LOCAL_DB_PATH', str(BASE_DIR / 'data' / 'brandithm.sqlite3'))
+    _volume_mount = os.getenv('RAILWAY_VOLUME_MOUNT_PATH')
+    _default_db_path = str(Path(_volume_mount) / 'brandithm.sqlite3') if _volume_mount else str(BASE_DIR / 'data' / 'brandithm.sqlite3')
+    LOCAL_DB_PATH = os.getenv('LOCAL_DB_PATH') or _default_db_path
     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'dev-secret-key')
     GEMINI_API_KEY = (os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY') or '').strip()
     GOOGLE_API_KEY = GEMINI_API_KEY

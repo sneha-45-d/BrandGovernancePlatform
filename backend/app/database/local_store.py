@@ -151,6 +151,27 @@ def _init_db(connection):
             expires_at TEXT NOT NULL,
             created_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS social_posts (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            platform TEXT NOT NULL,
+            external_id TEXT NOT NULL,
+            caption TEXT NOT NULL DEFAULT '',
+            media_url TEXT NOT NULL DEFAULT '',
+            media_type TEXT NOT NULL DEFAULT 'text',
+            permalink TEXT NOT NULL DEFAULT '',
+            published_at TEXT NOT NULL,
+            metrics TEXT NOT NULL DEFAULT '{}',
+            audit_status TEXT NOT NULL DEFAULT 'unaudited',
+            audit_result TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE (user_id, platform, external_id)
+        );
+        CREATE INDEX IF NOT EXISTS social_posts_user_platform
+            ON social_posts (user_id, platform, published_at DESC);
+        CREATE INDEX IF NOT EXISTS social_posts_user_audit
+            ON social_posts (user_id, audit_status);
 
         CREATE TABLE IF NOT EXISTS visual_guidelines (
             user_id TEXT PRIMARY KEY,

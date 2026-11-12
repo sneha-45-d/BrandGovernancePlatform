@@ -1,6 +1,9 @@
+/* eslint-disable react-refresh/only-export-components */
 import axios from 'axios'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AuthContext } from './auth-context'
+import { AuthContext, useAuth } from './auth-context'
+
+export { AuthContext, useAuth }
 
 const authStorageKey = 'brandithm-auth-session'
 

@@ -15,6 +15,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend/app ./app
 RUN mkdir -p /app/data
+VOLUME ["/app/data"]
 
 EXPOSE 8000
 

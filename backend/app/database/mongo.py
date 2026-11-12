@@ -1,36 +1,6 @@
 import logging
-from urllib.parse import quote, unquote, urlsplit, urlunsplit
-
-from pymongo import MongoClient
-from pymongo.errors import ConfigurationError
-
-from app.config import settings
-
-logger = logging.getLogger(__name__)
-
-
-def sanitize_mongo_uri(uri: str) -> str:
-    uri = (uri or '').strip()
-    if not uri:
-        return 'mongodb://localhost:27017'
-
-    try:
-        parsed = urlsplit(uri)
-        if parsed.scheme.startswith('mongodb') and parsed.username and parsed.password:
-            safe_user = quote(unquote(parsed.username), safe='')
-            safe_password = quote(unquote(parsed.password), safe='')
-            hostname = parsed.hostname or 'localhost'
-            port = f':{parsed.port}' if parsed.port else ''
-            netloc = f'{safe_user}:{safe_password}@{hostname}{port}'
-            return urlunsplit(parsed._replace(netloc=netloc))
-    except Exception:
-        pass
-
-    return uri
-
-
-import logging
 import os
+import sys
 import time
 from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
@@ -116,9 +86,10 @@ def is_mongo_available() -> bool:
     uri = sanitize_mongo_uri(settings.MONGO_URI)
     is_localhost = 'localhost' in uri or '127.0.0.1' in uri
     is_cloud = bool(os.getenv('RAILWAY_ENVIRONMENT') or os.getenv('PORT') or os.getenv('RENDER') or os.getenv('VERCEL'))
+    is_testing = bool(os.getenv('TESTING') or os.getenv('DISABLE_MONGO') or 'pytest' in sys.modules or 'unittest' in sys.modules)
 
-    # Fast skip on cloud environments if URI is unconfigured localhost
-    if is_localhost and is_cloud:
+    # Fast skip if explicitly in test mode or unconfigured cloud localhost
+    if is_testing or (is_localhost and is_cloud):
         _mongo_available = False
         _last_check_time = now
         return False

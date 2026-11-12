@@ -15,6 +15,7 @@ import {
   Palette,
   Radio,
   Settings,
+  ShieldAlert,
   ShieldCheck,
   Sparkles,
   Trophy,
@@ -45,6 +46,8 @@ const items = [
     to: '/social/overview',
     children: [
       { label: 'Overview', icon: LayoutDashboard, to: '/social/overview' },
+      { label: 'Post Audit & Monitor', icon: ShieldAlert, to: '/social/audit' },
+      { label: 'AI Strategy & Advice', icon: Sparkles, to: '/social/strategy' },
       { label: 'Brand Mentions', icon: MessageCircleMore, to: '/social/mentions' },
       { label: 'Sentiment Analysis', icon: BrainCircuit, to: '/social/sentiment' },
       { label: 'Competitor Intelligence', icon: Building2, to: '/social/competitors' },

@@ -22,6 +22,7 @@ import {
   Send,
   Settings2,
   ShieldAlert,
+  ShieldCheck,
   Sparkles,
   ThumbsDown,
   ThumbsUp,
@@ -47,14 +48,19 @@ import {
 } from 'recharts'
 import { Link } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
+import PostAuditPanel from '../components/PostAuditPanel'
+import StrategyRecommendationsPanel from '../components/StrategyRecommendationsPanel'
+import CompetitorComparisonDashboard from '../components/CompetitorComparisonDashboard'
 import { getApiErrorMessage } from '../lib/apiError'
 import { getCurrentUserId } from '../lib/brandData'
 
 const sections = [
   { id: 'overview', label: 'Overview', path: '/social/overview', icon: Activity },
+  { id: 'audit', label: 'Post Audit & Monitor', path: '/social/audit', icon: ShieldAlert },
+  { id: 'strategy', label: 'AI Strategy & Advice', path: '/social/strategy', icon: Sparkles },
+  { id: 'competitors', label: 'Competitor Intelligence', path: '/social/competitors', icon: Building2 },
   { id: 'mentions', label: 'Brand Mentions', path: '/social/mentions', icon: MessageCircleMore },
   { id: 'sentiment', label: 'Sentiment Analysis', path: '/social/sentiment', icon: BrainCircuit },
-  { id: 'competitors', label: 'Competitor Intelligence', path: '/social/competitors', icon: Building2 },
   { id: 'alerts', label: 'Intelligent Alerts', path: '/social/alerts', icon: BellRing },
 ]
 const sentimentColors = { Positive: '#10b981', Negative: '#ef4444', Neutral: '#94a3b8' }
@@ -170,6 +176,13 @@ export default function SocialIntelligencePage({ section = 'overview' }) {
   const [mentions, setMentions] = useState([])
   const [replyDrafts, setReplyDrafts] = useState({})
   const [mentionsLoading, setMentionsLoading] = useState(true)
+  const [posts, setPosts] = useState([])
+  const [postsLoading, setPostsLoading] = useState(true)
+  const [auditSummary, setAuditSummary] = useState(null)
+  const [strategy, setStrategy] = useState(null)
+  const [strategyLoading, setStrategyLoading] = useState(true)
+  const [competitorAnalysis, setCompetitorAnalysis] = useState(null)
+  const [competitorAnalysisLoading, setCompetitorAnalysisLoading] = useState(true)
   const [alerts, setAlerts] = useState([])
   const [alertsLoading, setAlertsLoading] = useState(true)
   const [mentionTotal, setMentionTotal] = useState(0)
@@ -308,6 +321,52 @@ export default function SocialIntelligencePage({ section = 'overview' }) {
     return () => { active = false }
   }, [alertSeverity, currentUserParams, section, unreadOnly])
 
+  const fetchPosts = () => {
+    setPostsLoading(true)
+    axios.get('/api/social/posts', { params: currentUserParams })
+      .then(({ data }) => setPosts(data.posts || []))
+      .catch((err) => setError(getApiErrorMessage(err, 'Unable to load posts.')))
+      .finally(() => setPostsLoading(false))
+
+    axios.get('/api/social/posts/audit-summary', { params: currentUserParams })
+      .then(({ data }) => setAuditSummary(data))
+      .catch(() => {})
+  }
+
+  const fetchStrategy = () => {
+    setStrategyLoading(true)
+    axios.get('/api/social/strategy-recommendations', { params: currentUserParams })
+      .then(({ data }) => setStrategy(data))
+      .catch((err) => setError(getApiErrorMessage(err, 'Unable to load strategy recommendations.')))
+      .finally(() => setStrategyLoading(false))
+  }
+
+  const fetchCompetitorAnalysis = () => {
+    setCompetitorAnalysisLoading(true)
+    axios.get('/api/social/competitor-analysis', { params: currentUserParams })
+      .then(({ data }) => setCompetitorAnalysis(data))
+      .catch((err) => setError(getApiErrorMessage(err, 'Unable to load competitor comparison analysis.')))
+      .finally(() => setCompetitorAnalysisLoading(false))
+  }
+
+  useEffect(() => {
+    if (['overview', 'audit'].includes(section)) {
+      fetchPosts()
+    }
+  }, [currentUserParams, section])
+
+  useEffect(() => {
+    if (section === 'strategy') {
+      fetchStrategy()
+    }
+  }, [currentUserParams, section])
+
+  useEffect(() => {
+    if (section === 'competitors') {
+      fetchCompetitorAnalysis()
+    }
+  }, [currentUserParams, section])
+
   const refreshSection = () => {
     setError('')
     setNotice('')
@@ -318,6 +377,15 @@ export default function SocialIntelligencePage({ section = 'overview' }) {
       }).then(({ data }) => setOverview(data))
         .catch((requestError) => setError(getApiErrorMessage(requestError, 'Unable to refresh social intelligence data.')))
         .finally(() => setOverviewLoading(false))
+    }
+    if (section === 'overview' || section === 'audit') {
+      fetchPosts()
+    }
+    if (section === 'strategy') {
+      fetchStrategy()
+    }
+    if (section === 'competitors') {
+      fetchCompetitorAnalysis()
     }
     if (section === 'mentions' || section === 'sentiment') {
       setMentionsLoading(true)
@@ -343,6 +411,48 @@ export default function SocialIntelligencePage({ section = 'overview' }) {
       }).then(({ data }) => setAlerts(data.alerts || []))
         .catch((requestError) => setError(getApiErrorMessage(requestError, 'Unable to refresh alerts.')))
         .finally(() => setAlertsLoading(false))
+    }
+  }
+
+  const saveCompetitorDirect = async (form) => {
+    setWorking(true)
+    setError('')
+    try {
+      const payload = {
+        user_id: getCurrentUserId(),
+        name: form.name,
+        keywords: form.keywords.split(',').map((item) => item.trim()).filter(Boolean),
+      }
+      await axios.post('/api/social/competitors', payload)
+      const { data } = await axios.get('/api/social/competitors', { params: currentUserParams })
+      setCompetitors(data.competitors || [])
+      fetchCompetitorAnalysis()
+      setNotice('Competitor added and benchmarked!')
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to add competitor.'))
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  const updateCompetitorDirect = async (id, form) => {
+    setWorking(true)
+    setError('')
+    try {
+      const payload = {
+        user_id: getCurrentUserId(),
+        name: form.name,
+        keywords: form.keywords.split(',').map((item) => item.trim()).filter(Boolean),
+      }
+      await axios.put(`/api/social/competitors/${id}`, payload)
+      const { data } = await axios.get('/api/social/competitors', { params: currentUserParams })
+      setCompetitors(data.competitors || [])
+      fetchCompetitorAnalysis()
+      setNotice('Competitor updated!')
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to update competitor.'))
+    } finally {
+      setWorking(false)
     }
   }
 
@@ -614,13 +724,27 @@ export default function SocialIntelligencePage({ section = 'overview' }) {
                   <label className="text-xs text-slate-500">To<input type="date" value={customEnd} onChange={(event) => { setOverviewLoading(true); setCustomEnd(event.target.value) }} className="mt-1 block rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" /></label>
                 </div>
               )}
-              <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <MetricCard label="Total brand mentions" value={metrics?.total_mentions ?? '—'} detail="Saved records in the selected period" icon={MessageCircleMore} />
                 <MetricCard label="Positive mentions" value={metrics?.positive_mentions ?? '—'} detail="AI-classified positive" icon={ThumbsUp} />
                 <MetricCard label="Negative mentions" value={metrics?.negative_mentions ?? '—'} detail="AI-classified negative" icon={ThumbsDown} tint="rose" />
+                <MetricCard label="Post Safety Score" value={auditSummary?.average_safety_score != null ? `${auditSummary.average_safety_score}/100` : '100/100'} detail={`${auditSummary?.critical_count ?? 0} critical false claims flagged`} icon={ShieldCheck} tint={auditSummary?.average_safety_score < 70 ? 'rose' : 'emerald'} />
+                <MetricCard label="Monitored Brand Posts" value={auditSummary?.total_posts ?? 0} detail={`${auditSummary?.audited_count ?? 0} audited posts across channels`} icon={Sparkles} tint="blue" />
                 <MetricCard label="Neutral mentions" value={metrics?.neutral_mentions ?? '—'} detail="AI-classified neutral" icon={Activity} tint="slate" />
                 <MetricCard label="Total engagement" value={metrics?.total_engagement?.toLocaleString() ?? '—'} detail="Sum of user-submitted likes, comments, and shares" icon={Heart} tint="blue" />
                 <MetricCard label="Reputation score" value={metrics?.reputation_score == null ? '—' : `${metrics.reputation_score}%`} detail="Positive share of AI-classified mentions" icon={ShieldAlert} tint="amber" />
+              </div>
+
+              <div className="mb-5 flex flex-wrap gap-2.5">
+                <Link to="/social/audit" className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white hover:bg-slate-800 transition">
+                  <ShieldAlert className="h-4 w-4 text-emerald-400" /> Open Post Audit & False Marketing Monitor &rarr;
+                </Link>
+                <Link to="/social/strategy" className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-800 hover:bg-slate-50 transition">
+                  <Sparkles className="h-4 w-4 text-emerald-600" /> AI Strategy Recommendations & Blueprints &rarr;
+                </Link>
+                <Link to="/social/competitors" className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-800 hover:bg-slate-50 transition">
+                  <Building2 className="h-4 w-4 text-sky-600" /> Competitor Comparison Dashboard &rarr;
+                </Link>
               </div>
 
               {overview?.data_note && <p className="mb-4 text-xs text-slate-500">{overview.data_note}</p>}
@@ -713,6 +837,40 @@ export default function SocialIntelligencePage({ section = 'overview' }) {
             </>
           )}
 
+          {section === 'audit' && (
+            <>
+              <PageTitle
+                icon={ShieldAlert}
+                eyebrow="Compliance & Brand Safety"
+                title="Post Monitor & Content Audit"
+                description="Detect and eliminate false marketing, deceptive guarantees, regulatory non-compliance, and identity-harming posts before or after publication."
+              />
+              <PostAuditPanel
+                posts={posts}
+                postsLoading={postsLoading}
+                auditSummary={auditSummary}
+                onRefresh={fetchPosts}
+                connections={connections}
+              />
+            </>
+          )}
+
+          {section === 'strategy' && (
+            <>
+              <PageTitle
+                icon={Sparkles}
+                eyebrow="AI Brand Growth & Tactics"
+                title="Social Media Strategy & Advice"
+                description="AI-generated post recommendations, actionable improvements, things to avoid, and content pillars customized to your audience sentiment."
+              />
+              <StrategyRecommendationsPanel
+                strategy={strategy}
+                loading={strategyLoading}
+                onRefresh={fetchStrategy}
+              />
+            </>
+          )}
+
           {section === 'mentions' && (
             <>
               <PageTitle icon={MessageCircleMore} eyebrow="Listening workspace" title="Brand mentions" description="Maintain monitoring terms and inspect each saved mention with its collection source." action={<button type="button" onClick={() => setShowAddMention((value) => !value)} className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"><Plus className="h-4 w-4" /> Add mention</button>} />
@@ -799,41 +957,17 @@ export default function SocialIntelligencePage({ section = 'overview' }) {
           )}
 
           {section === 'competitors' && (
-            <>
-              <PageTitle icon={Building2} eyebrow="Competitive listening" title="Competitor intelligence" description="Compare records available in your account. No competitor posts or performance are discovered unless supplied by an authorized source." action={<button type="button" onClick={() => { setEditingCompetitor(null); setCompetitorForm({ name: '', keywords: '' }); setShowAddCompetitor((value) => !value) }} className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white"><Plus className="h-4 w-4" /> Add competitor</button>} />
-              <div className="mb-5 grid gap-3 sm:grid-cols-3">
-                <MetricCard label="Tracked competitor profiles" value={competitorsLoading ? '…' : competitors.length} detail="User-configured profiles" icon={Users} tint="blue" />
-                <MetricCard label="Available comparison records" value={(overview?.competitor_comparison || []).filter((item) => item.name.toLowerCase() !== (config?.brand_name || '').toLowerCase()).reduce((sum, item) => sum + item.mentions, 0)} detail="Saved mentions linked to named entities" icon={MessageCircleMore} />
-                <MetricCard label="Authorized social connections" value={connections.filter((item) => item.status === 'connected').length} detail="OAuth status comes from authorized provider accounts" icon={Radio} tint="amber" />
-              </div>
-              {(showAddCompetitor || editingCompetitor) && <Panel className="mb-5" title={editingCompetitor ? 'Edit competitor profile' : 'Register a competitor'} description="Registration stores a profile and keywords; it does not collect competitor posts."><form onSubmit={saveCompetitor} className="grid gap-3 sm:grid-cols-2"><label className="text-xs font-medium text-slate-600">Competitor name<input required maxLength={120} value={competitorForm.name} onChange={(event) => setCompetitorForm({ ...competitorForm, name: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" /></label><label className="text-xs font-medium text-slate-600">Keywords (comma separated)<input value={competitorForm.keywords} onChange={(event) => setCompetitorForm({ ...competitorForm, keywords: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" /></label><div className="flex gap-2 sm:col-span-2"><button type="button" onClick={() => { setShowAddCompetitor(false); setEditingCompetitor(null) }} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-600">Cancel</button><button disabled={working} className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white">{working ? 'Saving…' : editingCompetitor ? 'Update profile' : 'Save competitor profile'}</button></div></form></Panel>}
-              <div className="mb-5 grid gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(18rem,0.7fr)]">
-                <Panel title="Available mentions by entity" description="Counts include only user-submitted or authorized API records saved in this account.">
-                  {(overview?.competitor_comparison || []).length ? <div className="h-72"><ResponsiveContainer width="100%" height="100%"><BarChart data={overview.competitor_comparison}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" tick={{ fontSize: 10 }} /><YAxis allowDecimals={false} tick={{ fontSize: 10 }} /><Tooltip /><Legend /><Bar dataKey="positive" name="Positive" fill="#10b981" /><Bar dataKey="neutral" name="Neutral" fill="#94a3b8" /><Bar dataKey="negative" name="Negative" fill="#ef4444" /></BarChart></ResponsiveContainer></div> : <EmptyState icon={Building2} title="No comparison records" description="Register competitors and add mentions tied to those profiles to compare saved data." /> }
-                </Panel>
-                <Panel title="Registered profiles" description="Configured names and tracking keywords.">
-                  {competitorsLoading ? <LoadingState label="Loading competitor profiles…" /> : competitors.length ? <div className="space-y-3">{competitors.map((item) => { const result = overview?.competitor_comparison?.find((row) => row.name.toLowerCase() === item.name.toLowerCase()); return <div key={item.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3"><div className="flex items-start justify-between gap-2"><div><p className="text-sm font-semibold text-slate-800">{item.name}</p><p className="mt-1 text-xs text-slate-500">{result?.mentions || 0} saved mention records</p></div><div className="flex"><button type="button" disabled={working} aria-label={`Edit ${item.name}`} onClick={() => { setEditingCompetitor(item); setCompetitorForm({ name: item.name, keywords: (item.keywords || []).join(', ') }); setShowAddCompetitor(false) }} className="rounded-lg p-2 text-slate-400 hover:bg-emerald-50 hover:text-emerald-700"><Edit2 className="h-4 w-4" /></button><button type="button" disabled={working} aria-label={`Remove ${item.name}`} onClick={() => deleteCompetitor(item.id)} className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button></div></div><div className="mt-2 flex flex-wrap gap-1">{(item.keywords || []).map((word) => <span key={word} className="rounded-full bg-white px-2 py-1 text-[10px] text-slate-500">{word}</span>)}</div></div> })}</div> : <EmptyState icon={Building2} title="No competitors registered" description="Add a competitor profile to enable comparison of records you are authorized to supply." /> }
-                </Panel>
-              </div>
-              <Panel className="mb-5" title="Visibility and engagement" description="Counts use only saved mentions and supplied engagement metrics.">
-                {(overview?.competitor_comparison || []).some((item) => item.mentions || item.engagement) ? (
-                  <div className="h-72">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={overview.competitor_comparison}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <XAxis dataKey="name" tick={{ fontSize: 10 }} /><YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
-                        <Tooltip /><Legend />
-                        <Bar dataKey="mentions" name="Visibility (mentions)" fill="#0ea5e9" />
-                        <Bar dataKey="engagement" name="Engagement" fill="#8b5cf6" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                ) : <EmptyState title="No visibility metrics" description="Add mention records with their available engagement metrics to compare entities." />}
-              </Panel>
-              <Panel title="Collection limits" description="Provider access is permission-scoped.">
-                <ConnectionList connections={connections} onConnect={connectPlatform} onDisconnect={disconnectPlatform} working={working} />
-              </Panel>
-            </>
+            <CompetitorComparisonDashboard
+              comparisonData={competitorAnalysis}
+              loading={competitorAnalysisLoading}
+              competitors={competitors}
+              competitorsLoading={competitorsLoading}
+              onRefresh={fetchCompetitorAnalysis}
+              onAddCompetitor={saveCompetitorDirect}
+              onEditCompetitor={updateCompetitorDirect}
+              onDeleteCompetitor={deleteCompetitor}
+              working={working}
+            />
           )}
 
           {section === 'alerts' && (
