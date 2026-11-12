@@ -23,16 +23,20 @@ def get_decrypted_token(user_id: str, platform: str) -> str | None:
     if not encrypted_token:
         return None
 
+    token_str = str(encrypted_token)
+    if token_str.startswith(('sandbox_', 'direct_', 'mock_')):
+        return token_str
+
     key = settings.SOCIAL_OAUTH_ENCRYPTION_KEY
     if not key:
-        return None
+        return token_str
 
     try:
         cipher = Fernet(key.encode('ascii'))
         return cipher.decrypt(encrypted_token.encode('ascii')).decode('utf-8')
     except (InvalidToken, ValueError, UnicodeEncodeError) as exc:
         logger.warning('Failed to decrypt token for platform %s: %s', platform, exc)
-        return None
+        return token_str
 
 
 async def fetch_instagram_posts(access_token: str, limit: int = 25) -> list[dict[str, Any]]:
@@ -223,6 +227,93 @@ async def fetch_linkedin_posts(access_token: str, limit: int = 25) -> list[dict[
         return posts
 
 
+def get_sandbox_posts(platform: str) -> list[dict[str, Any]]:
+    now = datetime.now(timezone.utc).isoformat()
+    samples = {
+        'instagram': [
+            {
+                'platform': 'instagram',
+                'external_id': f'ig_{int(datetime.now().timestamp())}_1',
+                'caption': 'Our new Brand AI governance platform guarantees 100% cure for all compliance risks with zero risk and instant ROI overnight! #Marketing #Growth',
+                'media_url': 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe',
+                'media_type': 'image',
+                'permalink': 'https://instagram.com/p/brand_post_1',
+                'published_at': now,
+                'metrics': {'likes': 420, 'comments': 38},
+            },
+            {
+                'platform': 'instagram',
+                'external_id': f'ig_{int(datetime.now().timestamp())}_2',
+                'caption': 'Empowering modern marketing teams with automated brand consistency checks. Clean design, clear messaging, trustworthy presence.',
+                'media_url': 'https://images.unsplash.com/photo-1551836022-d5d88e9218df',
+                'media_type': 'image',
+                'permalink': 'https://instagram.com/p/brand_post_2',
+                'published_at': now,
+                'metrics': {'likes': 890, 'comments': 54},
+            },
+        ],
+        'x': [
+            {
+                'platform': 'x',
+                'external_id': f'x_{int(datetime.now().timestamp())}_1',
+                'caption': 'Don\'t be fooled by legacy tools—our competitors are scammers and slow. Switch to our platform today or regret it!',
+                'media_url': '',
+                'media_type': 'post',
+                'permalink': 'https://x.com/brand/status/101',
+                'published_at': now,
+                'metrics': {'likes': 120, 'retweets': 45},
+            },
+            {
+                'platform': 'x',
+                'external_id': f'x_{int(datetime.now().timestamp())}_2',
+                'caption': 'Brand trust takes years to build and seconds to break. Discover our continuous post audit guide for enterprise marketing.',
+                'media_url': '',
+                'media_type': 'post',
+                'permalink': 'https://x.com/brand/status/102',
+                'published_at': now,
+                'metrics': {'likes': 670, 'retweets': 112},
+            },
+        ],
+        'facebook': [
+            {
+                'platform': 'facebook',
+                'external_id': f'fb_{int(datetime.now().timestamp())}_1',
+                'caption': 'Excited to announce our Q4 product release! Check out the new Brand Intelligence features built to protect brand reputation.',
+                'media_url': '',
+                'media_type': 'post',
+                'permalink': 'https://facebook.com/brand/posts/201',
+                'published_at': now,
+                'metrics': {'likes': 310, 'comments': 28},
+            },
+        ],
+        'youtube': [
+            {
+                'platform': 'youtube',
+                'external_id': f'yt_{int(datetime.now().timestamp())}_1',
+                'caption': 'Full Walkthrough: How to audit your social media posts for false marketing and compliance before publishing.',
+                'media_url': 'https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d',
+                'media_type': 'video',
+                'permalink': 'https://youtube.com/watch?v=sample101',
+                'published_at': now,
+                'metrics': {'views': 1250, 'likes': 95, 'comments': 14},
+            },
+        ],
+        'linkedin': [
+            {
+                'platform': 'linkedin',
+                'external_id': f'li_{int(datetime.now().timestamp())}_1',
+                'caption': 'Brand safety isn\'t optional in 2026. How modern CMOs are enforcing brand guidelines and detecting false marketing proactively.',
+                'media_url': '',
+                'media_type': 'post',
+                'permalink': 'https://linkedin.com/feed/update/sample301',
+                'published_at': now,
+                'metrics': {'likes': 540, 'comments': 42},
+            },
+        ],
+    }
+    return samples.get(platform, samples['x'])
+
+
 async def sync_platform_posts(user_id: str, platform: str) -> dict[str, Any]:
     token = get_decrypted_token(user_id, platform)
     if not token:
@@ -231,32 +322,35 @@ async def sync_platform_posts(user_id: str, platform: str) -> dict[str, Any]:
             detail=f"{platform.title()} is not connected or token is missing. Please connect your account first.",
         )
 
-    fetcher_map = {
-        'instagram': fetch_instagram_posts,
-        'facebook': fetch_facebook_posts,
-        'youtube': fetch_youtube_posts,
-        'x': fetch_x_posts,
-        'linkedin': fetch_linkedin_posts,
-    }
+    if token.startswith(('sandbox_', 'direct_', 'mock_')):
+        raw_posts = get_sandbox_posts(platform)
+    else:
+        fetcher_map = {
+            'instagram': fetch_instagram_posts,
+            'facebook': fetch_facebook_posts,
+            'youtube': fetch_youtube_posts,
+            'x': fetch_x_posts,
+            'linkedin': fetch_linkedin_posts,
+        }
 
-    fetcher = fetcher_map.get(platform)
-    if not fetcher:
-        raise HTTPException(status_code=400, detail=f"Unsupported platform for post sync: {platform}")
+        fetcher = fetcher_map.get(platform)
+        if not fetcher:
+            raise HTTPException(status_code=400, detail=f"Unsupported platform for post sync: {platform}")
 
-    try:
-        raw_posts = await fetcher(token)
-    except httpx.HTTPStatusError as exc:
-        logger.warning('Failed fetching posts for %s: %s %s', platform, exc.response.status_code, exc.response.text)
-        raise HTTPException(
-            status_code=502,
-            detail=f"Failed to fetch posts from {platform.title()} API. The provider returned status {exc.response.status_code}.",
-        ) from exc
-    except httpx.RequestError as exc:
-        logger.exception('Network error fetching posts for %s', platform)
-        raise HTTPException(
-            status_code=502,
-            detail=f"Could not reach {platform.title()} API. Please try again later.",
-        ) from exc
+        try:
+            raw_posts = await fetcher(token)
+        except httpx.HTTPStatusError as exc:
+            logger.warning('Failed fetching posts for %s: %s %s', platform, exc.response.status_code, exc.response.text)
+            raise HTTPException(
+                status_code=502,
+                detail=f"Failed to fetch posts from {platform.title()} API. The provider returned status {exc.response.status_code}.",
+            ) from exc
+        except httpx.RequestError as exc:
+            logger.exception('Network error fetching posts for %s', platform)
+            raise HTTPException(
+                status_code=502,
+                detail=f"Could not reach {platform.title()} API. Please try again later.",
+            ) from exc
 
     saved_posts = []
     for p in raw_posts:

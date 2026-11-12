@@ -112,7 +112,7 @@ def is_mongo_available() -> bool:
 
 
 def get_db():
-    _, raw_db = _init_client()
     if not is_mongo_available():
         return UnavailableDatabase(PyMongoError('MongoDB is unavailable; using local storage.'))
+    _, raw_db = _init_client()
     return raw_db
