@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import math
 import re
 import sqlite3
 from datetime import datetime, timezone
@@ -8,7 +9,6 @@ from typing import Literal
 
 from bson import ObjectId
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
-from google import genai
 from google.genai import types
 from pydantic import BaseModel, Field
 from pymongo.errors import PyMongoError
@@ -312,6 +312,8 @@ async def run_ai_brand_analysis(
     brand_name: str,
     guidelines: dict,
     media_files: list[MediaFile] | None = None,
+    quick_review: bool = False,
+    review_context: dict | None = None,
 ) -> dict:
     media_files = media_files or []
     api_key = settings.GOOGLE_API_KEY or ''
@@ -329,7 +331,61 @@ async def run_ai_brand_analysis(
         )
 
     guideline_context = build_guideline_context(guidelines)
-    prompt = """
+    if quick_review:
+        review_context = review_context or {}
+        context_lines = [
+            f"Campaign objective: {review_context.get('campaign_goal') or 'Not provided'}",
+            f"Target audience: {review_context.get('target_audience') or guidelines.get('target_audience') or 'Not provided'}",
+            f"Channel or format: {review_context.get('channel') or 'Not provided'}",
+        ]
+        prompt = """
+You are BRANDITHM, a senior brand, marketing, and content-governance reviewer. Give a decision-ready assessment that a real marketing team can act on before publishing.
+
+Brand:
+{brand_name}
+
+Brand guidelines:
+{guideline_context}
+
+Campaign context:
+{review_context}
+
+Content:
+{content}
+
+Return valid JSON only:
+{{
+  "overall_score": 0,
+  "brand_compliance_score": 0,
+  "tone_consistency": 0,
+  "grammar_score": 0,
+  "readability_score": 0,
+  "audience_fit": {{"assessment": "strong|mixed|weak|unknown", "explanation": ""}},
+  "channel_fit": {{"assessment": "strong|mixed|weak|unknown", "explanation": ""}},
+  "claim_checks": [{{"claim": "", "risk": "high|medium|low", "evidence_status": "supported|unsupported|not provided", "explanation": "", "next_step": ""}}],
+  "violations": [{{"title": "", "severity": "low|medium|high|critical", "evidence": "", "description": ""}}],
+  "critical_issues": [{{"title": "", "description": "", "evidence": "", "recommendation": ""}}],
+  "recommendations": [{{"title": "", "priority": "high|medium|low", "evidence": "", "explanation": "", "next_step": "", "measurement": "", "suggested_copy": ""}}],
+  "summary": ""
+}}
+
+Rules:
+- Score only the submitted content against the supplied guidelines and campaign context; use integer scores from 0 to 100 and do not inflate them.
+- Review the message's objective, audience relevance, benefit clarity, proof for material claims, brand voice, restricted terms, CTA, and suitability for the stated channel. Mark audience or channel fit "unknown" when context is insufficient; do not guess.
+- Ground each finding in a short exact quote or identify the specific information that is missing. Never invent product capabilities, customer outcomes, legal requirements, research, citations, or performance data.
+- For claims, assess only whether evidence was supplied in this request. "Not provided" means the claim needs human substantiation; it does not mean the claim is false. Do not present this as external fact-checking.
+- Return only material issues and no more than 3 prioritized recommendations. Avoid generic advice and do not repeat the same issue in multiple sections.
+- Each recommendation must say why it matters, give a specific next action, and include a realistic way to verify completion. Suggested copy must preserve the original intent and must not add unsupported facts or promises.
+- Keep the summary to two concise sentences: overall decision and the most important action before publication.
+- Base any media findings only on visible or audible evidence.
+""".format(
+            brand_name=brand_name,
+            guideline_context=guideline_context,
+            review_context='\n'.join(context_lines),
+            content=content,
+        )
+    else:
+        prompt = """
 You are BRANDITHM AI Brand Governance Engine.
 Analyze the submitted marketing content against the brand guidelines below.
 
@@ -363,10 +419,10 @@ Rules:
 - For images, audio, video, and presentation slide images, base findings on the provided media. Do not infer unseen content.
 - Keep the improved_content version aligned with the brand voice but do not rewrite the original content automatically.
 """.format(
-        brand_name=brand_name,
-        guideline_context=guideline_context,
-        content=content,
-    )
+            brand_name=brand_name,
+            guideline_context=guideline_context,
+            content=content,
+        )
 
     configured_model = (settings.GEMINI_MODEL or 'gemini-3.5-flash-lite').strip()
     models_to_try = list(dict.fromkeys([
@@ -380,6 +436,7 @@ Rules:
 
     last_error = None
     client = get_genai_client(api_key)
+    model_errors = []
     for model_name in filter(None, models_to_try):
         try:
             if media_files:
@@ -392,35 +449,63 @@ Rules:
                         config=types.GenerateContentConfig(
                             temperature=0.2,
                             response_mime_type='application/json',
-                            max_output_tokens=2048,
+                            max_output_tokens=1536 if quick_review else 2048,
                         ),
                     )
 
                 response = await asyncio.to_thread(_call_gemini)
                 raw_response = response.text
             parsed = parse_ai_json_response(raw_response)
+            score_fields = (
+                'overall_score',
+                'brand_compliance_score',
+                'tone_consistency',
+                'grammar_score',
+                'readability_score',
+            )
+            scores = {}
+            for field in score_fields:
+                value = parsed.get(field)
+                if isinstance(value, bool):
+                    raise ValueError(f'Gemini returned an invalid {field}.')
+                try:
+                    score = float(value)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(f'Gemini returned an invalid {field}.') from exc
+                if not math.isfinite(score) or not 0 <= score <= 100:
+                    raise ValueError(f'Gemini returned an out-of-range {field}.')
+                scores[field] = round(score)
+
+            if not isinstance(parsed.get('summary'), str) or not parsed['summary'].strip():
+                raise ValueError('Gemini returned an empty analysis summary.')
+            for field in ('violations', 'critical_issues', 'recommendations'):
+                items = parsed.get(field, [])
+                if not isinstance(items, list) or not all(isinstance(item, dict) for item in items):
+                    raise ValueError(f'Gemini returned an invalid {field} list.')
+            claim_checks = parsed.get('claim_checks', [])
+            if not isinstance(claim_checks, list) or not all(isinstance(item, dict) for item in claim_checks):
+                raise ValueError('Gemini returned an invalid claim_checks list.')
+
             tone_report = parsed.get('tone_analysis')
             if not isinstance(tone_report, dict) or 'detected' not in tone_report:
                 tone_report = tone_service.analyze_tone_local(content, guidelines)
             return {
-                'overall_score': int(parsed.get('overall_score', 0)),
-                'brand_compliance_score': int(parsed.get('brand_compliance_score', 0)),
-                'tone_consistency': int(parsed.get('tone_consistency', 0)),
-                'grammar_score': int(parsed.get('grammar_score', 0)),
-                'readability_score': int(parsed.get('readability_score', 0)),
+                **scores,
                 'tone_analysis': tone_report,
+                'audience_fit': parsed.get('audience_fit') if isinstance(parsed.get('audience_fit'), dict) else None,
+                'channel_fit': parsed.get('channel_fit') if isinstance(parsed.get('channel_fit'), dict) else None,
+                'claim_checks': claim_checks,
                 'violations': parsed.get('violations') or [],
                 'critical_issues': parsed.get('critical_issues') or [],
                 'recommendations': parsed.get('recommendations') or [],
-                'summary': parsed.get('summary') or 'AI review completed successfully.',
+                'summary': parsed['summary'].strip(),
                 'improved_content': parsed.get('improved_content') or content,
                 'engine': 'gemini',
             }
         except Exception as exc:
             last_error = exc
+            model_errors.append(str(exc).upper())
             logger.warning('Gemini model %s failed: %s', model_name, exc)
-            if '429' in str(exc) or 'quota' in str(exc).lower():
-                await asyncio.sleep(1.0)
 
     if media_files:
         detail = 'Gemini could not complete the media analysis. No text-only fallback was used.'
@@ -429,9 +514,14 @@ Rules:
         logger.error('Gemini media analysis failed', exc_info=last_error)
         raise HTTPException(status_code=502, detail=detail) from last_error
 
-    warning = 'Gemini AI rate limit or quota exceeded. Local governance rules were used for this check.'
-    if last_error and '404' in str(last_error):
-        warning = 'Gemini model is currently updating. Local governance rules were used for this check.'
+    if any('RESOURCE_EXHAUSTED' in error or '429' in error for error in model_errors):
+        warning = 'Gemini quota or rate limit was reached. Local governance rules were used for this check.'
+    elif any('UNAVAILABLE' in error or '503' in error for error in model_errors):
+        warning = 'Gemini is temporarily unavailable. Local governance rules were used for this check.'
+    elif any('404' in error for error in model_errors):
+        warning = 'No configured Gemini model is available to this API key. Local governance rules were used for this check.'
+    else:
+        warning = 'Gemini did not return a valid analysis. Local governance rules were used for this check.'
     return build_local_analysis(content, brand_name, guidelines, warning_msg=warning)
 
 
@@ -796,6 +886,10 @@ async def analyze_content(
     brand_name: str = Form('BRANDITHM'),
     content_title: str = Form(''),
     guidelines: str = Form('{}'),
+    analysis_mode: Literal['full', 'quick'] = Form('full'),
+    campaign_goal: str = Form(''),
+    target_audience: str = Form(''),
+    channel: str = Form(''),
     file: UploadFile | None = File(None),
     current_user: dict = Depends(get_authenticated_user),
 ):
@@ -861,6 +955,12 @@ async def analyze_content(
         brand_name,
         guideline_payload,
         media_files=media_files,
+        quick_review=analysis_mode == 'quick',
+        review_context={
+            'campaign_goal': campaign_goal.strip(),
+            'target_audience': target_audience.strip(),
+            'channel': channel.strip(),
+        },
     )
     analysis['source_type'] = ingested_file.content_type if ingested_file else 'text'
 

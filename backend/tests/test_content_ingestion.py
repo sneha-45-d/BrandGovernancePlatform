@@ -1,4 +1,5 @@
 import asyncio
+import json
 import unittest
 from io import BytesIO
 from pathlib import Path
@@ -126,6 +127,139 @@ class ContentIngestionTests(unittest.TestCase):
             result = asyncio.run(run_ai_brand_analysis('A clear campaign message.', 'Test Brand', {}))
         self.assertEqual(result['engine'], 'local')
         self.assertIn('not an AI model', result['warning'])
+
+    def test_quick_brand_review_uses_compact_evidence_based_prompt(self):
+        response_data = {
+            'overall_score': 82,
+            'brand_compliance_score': 84,
+            'tone_consistency': 80,
+            'grammar_score': 95,
+            'readability_score': 88,
+            'audience_fit': {
+                'assessment': 'mixed',
+                'explanation': 'The benefit is clear, but the intended buyer is not named.',
+            },
+            'channel_fit': {
+                'assessment': 'strong',
+                'explanation': 'The copy is concise enough for a short-form placement.',
+            },
+            'claim_checks': [{
+                'claim': '“the best platform”',
+                'risk': 'high',
+                'evidence_status': 'not provided',
+                'explanation': 'No comparative evidence was supplied.',
+                'next_step': 'Replace the superlative or provide approved substantiation.',
+            }],
+            'violations': [{
+                'title': 'Unsupported superlative',
+                'severity': 'high',
+                'evidence': '“the best platform”',
+                'description': 'The claim has no supporting evidence.',
+            }],
+            'critical_issues': [],
+            'recommendations': [{
+                'title': 'Substantiate or soften the claim',
+                'priority': 'high',
+                'evidence': '“the best platform”',
+                'explanation': 'The superlative may undermine trust.',
+                'next_step': 'Replace it with a verifiable product benefit.',
+                'measurement': 'Review the revised claim with the product team.',
+                'suggested_copy': 'A platform built for clearer workflows.',
+            }],
+            'summary': 'The copy is clear but includes an unsupported superlative. Replace it with a verifiable benefit.',
+        }
+        client = SimpleNamespace(
+            models=SimpleNamespace(
+                generate_content=MagicMock(return_value=SimpleNamespace(text=json.dumps(response_data))),
+            ),
+        )
+
+        with patch('app.routes.content.get_genai_client', return_value=client), \
+             patch('app.routes.content.settings.GOOGLE_API_KEY', 'test-key'), \
+             patch('app.routes.content.settings.GEMINI_MODEL', 'gemini-3.5-flash'):
+            result = asyncio.run(run_ai_brand_analysis(
+                'This is the best platform.',
+                'Test Brand',
+                {},
+                quick_review=True,
+                review_context={
+                    'campaign_goal': 'Increase qualified demo requests',
+                    'target_audience': 'Operations leads at small businesses',
+                    'channel': 'LinkedIn sponsored post',
+                },
+            ))
+
+        request = client.models.generate_content.call_args.kwargs
+        self.assertIn('Campaign objective: Increase qualified demo requests', request['contents'])
+        self.assertIn('Target audience: Operations leads at small businesses', request['contents'])
+        self.assertIn('Channel or format: LinkedIn sponsored post', request['contents'])
+        self.assertIn('Do not present this as external fact-checking.', request['contents'])
+        self.assertNotIn('improved_content', request['contents'])
+        self.assertEqual(request['config'].max_output_tokens, 1536)
+        self.assertEqual(result['recommendations'][0]['next_step'], 'Replace it with a verifiable product benefit.')
+        self.assertEqual(result['claim_checks'][0]['evidence_status'], 'not provided')
+        self.assertEqual(result['audience_fit']['assessment'], 'mixed')
+
+    def test_brand_review_retries_supported_model_after_invalid_json(self):
+        response_data = {
+            'overall_score': 77,
+            'brand_compliance_score': 75,
+            'tone_consistency': 80,
+            'grammar_score': 95,
+            'readability_score': 85,
+            'violations': [],
+            'critical_issues': [],
+            'recommendations': [],
+            'summary': 'The message is clear and aligned with the brand.',
+        }
+        client = SimpleNamespace(
+            models=SimpleNamespace(
+                generate_content=MagicMock(side_effect=[
+                    SimpleNamespace(text='{invalid json'),
+                    SimpleNamespace(text=json.dumps(response_data)),
+                ]),
+            ),
+        )
+
+        with patch('app.routes.content.get_genai_client', return_value=client), \
+             patch('app.routes.content.settings.GOOGLE_API_KEY', 'test-key'), \
+             patch('app.routes.content.settings.GEMINI_MODEL', 'gemini-3.5-flash'):
+            result = asyncio.run(run_ai_brand_analysis(
+                'A clear campaign message.',
+                'Test Brand',
+                {},
+                quick_review=True,
+            ))
+
+        attempted_models = [
+            call.kwargs['model']
+            for call in client.models.generate_content.call_args_list
+        ]
+        self.assertEqual(attempted_models, ['gemini-3.5-flash', 'gemini-3.5-flash-lite'])
+        self.assertEqual(result['engine'], 'gemini')
+
+    def test_brand_review_reports_quota_when_fallback_models_are_unavailable(self):
+        def fail_by_model(**kwargs):
+            if kwargs['model'] == 'gemini-3.1-flash-lite':
+                raise RuntimeError('429 RESOURCE_EXHAUSTED')
+            raise RuntimeError('404 NOT_FOUND')
+
+        client = SimpleNamespace(
+            models=SimpleNamespace(generate_content=MagicMock(side_effect=fail_by_model)),
+        )
+
+        with patch('app.routes.content.get_genai_client', return_value=client), \
+             patch('app.routes.content.settings.GOOGLE_API_KEY', 'test-key'), \
+             patch('app.routes.content.settings.GEMINI_MODEL', 'gemini-3.1-flash-lite'):
+            result = asyncio.run(run_ai_brand_analysis(
+                'A clear campaign message.',
+                'Test Brand',
+                {},
+                quick_review=True,
+            ))
+
+        self.assertEqual(result['engine'], 'local')
+        self.assertIn('quota or rate limit', result['warning'])
 
 
 if __name__ == '__main__':
