@@ -241,7 +241,7 @@ class ContentIngestionTests(unittest.TestCase):
             ),
         )
 
-        with patch('app.routes.content.genai.Client', return_value=client), \
+        with patch('app.routes.content.get_genai_client', return_value=client), \
              patch('app.routes.content.settings.GOOGLE_API_KEY', 'test-key'), \
              patch('app.routes.content.settings.GEMINI_MODEL', 'gemini-3.5-flash'):
             result = asyncio.run(run_ai_brand_analysis(
