@@ -107,6 +107,11 @@ def brand_dashboard(
             'summary': (report.get('analysis') or {}).get('summary') or '',
             'overall_score': (report.get('analysis') or {}).get('overall_score'),
             'compliance_score': (report.get('analysis') or {}).get('brand_compliance_score'),
+            'has_critical_findings': any(
+                str(issue.get('severity', '')).lower() in {'high', 'critical'}
+                for issue in ((report.get('analysis') or {}).get('violations') or [])
+                if isinstance(issue, dict)
+            ),
             'status': report.get('status') or 'completed',
             'review_status': report.get('review_status') or 'needs_review',
             'created_at': report.get('created_at'),

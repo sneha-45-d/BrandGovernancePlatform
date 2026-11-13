@@ -26,6 +26,7 @@ import {
 import InfoCard from '../components/InfoCard'
 import Sidebar from '../components/Sidebar'
 import { getCurrentUserId, getLocalAnalyses } from '../lib/brandData'
+import { useAuth } from '../lib/AuthContext'
 
 const emptyDashboard = {
   brand_name: 'BRANDITHM',
@@ -37,7 +38,12 @@ const emptyDashboard = {
 
 function getLocalDashboard(analyses) {
   if (!analyses.length) return emptyDashboard
-  const scored = analyses.filter((item) => Number.isFinite(Number(item.overall_score)))
+  const scored = analyses.filter((item) => (
+    item.overall_score !== null
+    && item.overall_score !== undefined
+    && item.overall_score !== ''
+    && Number.isFinite(Number(item.overall_score))
+  ))
   const average = scored.length
     ? Math.round(scored.reduce((sum, item) => sum + Number(item.overall_score), 0) / scored.length)
     : null
@@ -62,16 +68,29 @@ function formatTime(value) {
 }
 
 export default function DashboardPage() {
+  const { user } = useAuth()
   const [dashboard, setDashboard] = useState(() => getLocalDashboard(getLocalAnalyses()))
   const [recentAnalyses, setRecentAnalyses] = useState(() => getLocalAnalyses().slice(0, 5))
   const [search, setSearch] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [refreshWarning, setRefreshWarning] = useState('')
 
   useEffect(() => {
     let active = true
     const localAnalyses = getLocalAnalyses()
+    const localDashboard = getLocalDashboard(localAnalyses)
 
     const loadDashboard = async () => {
+      if (user?.localOnly) {
+        setDashboard(localDashboard)
+        setRecentAnalyses(localAnalyses.slice(0, 5))
+        setRefreshWarning('')
+        setLoading(false)
+        return
+      }
+
+      setLoading(true)
+      setRefreshWarning('')
       try {
         const [dashboardResult] = await Promise.allSettled([
           axios.get('/api/brand/dashboard', { params: { user_id: getCurrentUserId() } }),
@@ -89,6 +108,9 @@ export default function DashboardPage() {
         const remoteStats = dashboardResult.status === 'fulfilled'
           ? dashboardResult.value.data || emptyDashboard
           : getLocalDashboard(combined)
+        if (dashboardResult.status === 'rejected') {
+          setRefreshWarning('Could not refresh reviews from the server. Showing saved reviews from this browser.')
+        }
 
         setDashboard({
           ...emptyDashboard,
@@ -98,7 +120,9 @@ export default function DashboardPage() {
         setRecentAnalyses(combined.slice(0, 5))
       } catch (error) {
         if (!active) return
-        setDashboard(getLocalDashboard(localAnalyses))
+        console.error('Unable to load the overview dashboard:', error)
+        setRefreshWarning('Could not refresh reviews from the server. Showing saved reviews from this browser.')
+        setDashboard(localDashboard)
         setRecentAnalyses(localAnalyses.slice(0, 5))
       } finally {
         if (active) setLoading(false)
@@ -107,7 +131,7 @@ export default function DashboardPage() {
 
     loadDashboard()
     return () => { active = false }
-  }, [])
+  }, [user?.id, user?.localOnly])
 
   const visibleAnalyses = useMemo(() => {
     const term = search.trim().toLowerCase()
@@ -118,10 +142,15 @@ export default function DashboardPage() {
   }, [recentAnalyses, search])
 
   const chartData = useMemo(() => {
-    const sorted = [...recentAnalyses].reverse()
+    const sorted = [...recentAnalyses].reverse().filter((item) => (
+      item.overall_score !== null
+      && item.overall_score !== undefined
+      && item.overall_score !== ''
+      && Number.isFinite(Number(item.overall_score))
+    ))
     return sorted.map((item, index) => ({
       name: item.title?.slice(0, 14) || `Review ${index + 1}`,
-      score: Math.round(Number(item.overall_score) || 0),
+      score: Math.round(Number(item.overall_score)),
     }))
   }, [recentAnalyses])
 
@@ -187,6 +216,11 @@ export default function DashboardPage() {
           <Sidebar score={dashboard.consistency_score} />
 
           <main className="min-w-0 flex-1 space-y-6">
+            {refreshWarning && (
+              <p role="status" className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                {refreshWarning}
+              </p>
+            )}
             <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               {metrics.map((metric) => (
                 <InfoCard key={metric.title} icon={metric.icon} title={metric.title} value={loading ? '…' : metric.value} description={metric.description} />
@@ -255,7 +289,9 @@ export default function DashboardPage() {
                 <div className="space-y-3">
                   {visibleAnalyses.map((item) => {
                     const issues = item.analysis?.violations || []
-                    const flagged = issues.some((issue) => ['high', 'critical'].includes(String(issue.severity).toLowerCase()))
+                    const flagged = item.has_critical_findings ?? issues.some(
+                      (issue) => ['high', 'critical'].includes(String(issue.severity).toLowerCase())
+                    )
                     return (
                       <div key={item.id} className="flex flex-col justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 sm:flex-row sm:items-center">
                         <div className="min-w-0">
