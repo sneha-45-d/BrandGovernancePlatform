@@ -1018,13 +1018,12 @@ function TermField({ label, value, onChange, placeholder }) {
 
 function ConnectionList({ connections = [], compact = false, onConnect, onDisconnect, working = false }) {
   const [profileUrls, setProfileUrls] = useState({})
-  const [activeInput, setActiveInput] = useState(null)
 
   if (!connections.length) return <p className="text-xs text-slate-500">Loading provider status…</p>
   return (
     <div className={compact ? 'space-y-2' : 'grid gap-3 sm:grid-cols-2 xl:grid-cols-3'}>
       {connections.map((connection) => (
-        <div key={connection.platform} className="rounded-xl border border-slate-100 bg-white/70 p-3">
+        <div key={connection.platform} className="rounded-xl border border-slate-100 bg-white/70 p-3.5">
           <div className="flex items-center justify-between gap-2">
             <p className="text-sm font-semibold text-slate-800">{connection.name}</p>
             <span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${
@@ -1042,67 +1041,44 @@ function ConnectionList({ connections = [], compact = false, onConnect, onDiscon
             </span>
           </div>
           {!compact && <p className="mt-1 text-xs leading-5 text-slate-500">{connection.setup_requirements}</p>}
-          <p className="mt-1 text-[10px] text-slate-400">{connection.credentials_configured ? 'Developer credentials configured; OAuth consent is still required.' : 'Enter profile link or username to connect and sync posts.'}</p>
-          {(connection.oauth_available || connection.status === 'connected' || connection.status === 'reauth_required') && (
-            <div className="mt-2 space-y-2">
-              {connection.status !== 'connected' && (
-                <>
-                  {activeInput === connection.platform ? (
-                    <div className="flex flex-col gap-1.5 pt-1">
-                      <div className="flex gap-1.5">
-                        <input
-                          type="text"
-                          placeholder={`https://${connection.platform}.com/handle or @handle`}
-                          value={profileUrls[connection.platform] || ''}
-                          onChange={(e) => setProfileUrls({ ...profileUrls, [connection.platform]: e.target.value })}
-                          className="flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none"
-                        />
-                        <button
-                          type="button"
-                          disabled={working || !profileUrls[connection.platform]?.trim()}
-                          onClick={() => onConnect?.(connection.platform, profileUrls[connection.platform])}
-                          className="rounded-lg bg-emerald-600 px-2.5 py-1 text-[10px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
-                        >
-                          Connect
-                        </button>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setActiveInput(null)}
-                        className="self-start text-[10px] text-slate-400 hover:text-slate-600"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        disabled={working}
-                        onClick={() => setActiveInput(connection.platform)}
-                        className="rounded-lg bg-emerald-700 px-2.5 py-1.5 text-[10px] font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"
-                      >
-                        Connect with Profile Link
-                      </button>
-                      <button
-                        type="button"
-                        disabled={working}
-                        onClick={() => onConnect?.(connection.platform)}
-                        className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[10px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                      >
-                        Auto
-                      </button>
-                    </div>
-                  )}
-                </>
-              )}
-              {(connection.status === 'connected' || connection.status === 'reauth_required') && (
-                <div className="flex gap-2">
-                  <button type="button" disabled={working} onClick={() => onDisconnect?.(connection.platform)} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[10px] font-semibold text-slate-600 disabled:opacity-50">Disconnect</button>
-                </div>
-              )}
-            </div>
-          )}
+          <p className="mt-1 text-[10px] text-slate-400">
+            {connection.status === 'connected'
+              ? `Posts from ${connection.account_name || 'this account'} are synced and ready for audit.`
+              : 'Paste your profile URL or @handle to connect and sync posts.'}
+          </p>
+
+          <div className="mt-2.5">
+            {connection.status !== 'connected' ? (
+              <div className="flex gap-1.5">
+                <input
+                  type="text"
+                  placeholder={`https://${connection.platform}.com/handle or @handle`}
+                  value={profileUrls[connection.platform] || ''}
+                  onChange={(e) => setProfileUrls({ ...profileUrls, [connection.platform]: e.target.value })}
+                  className="flex-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  disabled={working || !profileUrls[connection.platform]?.trim()}
+                  onClick={() => onConnect?.(connection.platform, profileUrls[connection.platform])}
+                  className="rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"
+                >
+                  Connect
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={working}
+                  onClick={() => onDisconnect?.(connection.platform)}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-rose-600 hover:border-rose-200 disabled:opacity-50"
+                >
+                  Disconnect
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       ))}
     </div>
