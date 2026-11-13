@@ -67,12 +67,15 @@ export default function AuthPage({ mode = 'signin' }) {
         : { full_name: formData.full_name.trim(), email: formData.email, password: formData.password }
       let session
       try {
-        const { data } = await axios.post(endpoint, payload, { timeout: 8000 })
+        const { data } = await axios.post(endpoint, payload, { timeout: 12000 })
         session = data
       } catch (requestError) {
-        if (requestError.response?.status === 409 || requestError.response?.status === 422) {
+        // If the backend returned an HTTP response (401 wrong password, 409 already exists, 422 invalid, 503, etc.),
+        // surface the actual backend error instead of creating an isolated offline session.
+        if (requestError.response) {
           throw requestError
         }
+        // Only fall back to local browser storage if the device is completely offline or backend is unreachable
         if (isSignIn) {
           session = await loginLocalAccount(payload)
           try {
@@ -80,7 +83,7 @@ export default function AuthPage({ mode = 'signin' }) {
               full_name: session.user.full_name,
               email: payload.email,
               password: payload.password,
-            }, { timeout: 8000 })
+            }, { timeout: 12000 })
             session = data
           } catch (migrationError) {
             if (migrationError.response?.status !== 409) {

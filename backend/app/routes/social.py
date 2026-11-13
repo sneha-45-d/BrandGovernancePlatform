@@ -5,8 +5,9 @@ import secrets
 import sqlite3
 from datetime import date, datetime, timezone
 from typing import Literal
+from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field, field_validator
 
@@ -433,9 +434,25 @@ class DirectConnectInput(BaseModel):
     account_name: str | None = None
 
 
+def get_frontend_base_url(request: Request | None = None) -> str:
+    if request:
+        origin = request.headers.get('origin') or request.headers.get('referer')
+        if origin:
+            try:
+                parsed = urlparse(origin)
+                if parsed.scheme and parsed.netloc:
+                    return f"{parsed.scheme}://{parsed.netloc}".rstrip('/')
+            except Exception:
+                pass
+    if settings.FRONTEND_URL and 'localhost' not in settings.FRONTEND_URL:
+        return settings.FRONTEND_URL.rstrip('/')
+    return 'https://frontend-iota-pink-23.vercel.app'
+
+
 @router.get('/social/integrations/{platform}/connect')
 def connect_social_platform(
     platform: str,
+    request: Request,
     current_user: dict = Depends(get_authenticated_user),
 ):
     user_id = verify_user_scope(current_user, None)
@@ -458,7 +475,7 @@ def connect_social_platform(
             refresh_token_encrypted=None,
             token_expires_at=None,
         ))
-        frontend_url = (settings.FRONTEND_URL or 'https://frontend-iota-pink-23.vercel.app').rstrip('/')
+        frontend_url = get_frontend_base_url(request)
         return {
             'authorization_url': f'{frontend_url}/social/overview?social_connection=connected&platform={platform}',
             'status': 'connected',
@@ -499,12 +516,14 @@ def direct_connect_platform(
 @router.get('/social/integrations/{platform}/callback')
 def social_platform_callback(
     platform: str,
+    request: Request,
     state: str | None = Query(default=None, max_length=256),
     code: str | None = Query(default=None, max_length=4096),
     error: str | None = Query(default=None, max_length=80),
 ):
     if platform not in social_oauth.PROVIDER_AUTH_URLS:
         raise HTTPException(status_code=404, detail='This social platform is not supported.')
+    frontend_url = get_frontend_base_url(request)
     if error:
         if state:
             try:
@@ -513,19 +532,19 @@ def social_platform_callback(
             except HTTPException:
                 logger.info('OAuth state cleanup did not complete after provider denial')
         return RedirectResponse(
-            f'{settings.FRONTEND_URL}/social/overview?social_connection=denied&platform={platform}',
+            f'{frontend_url}/social/overview?social_connection=denied&platform={platform}',
             status_code=303,
         )
     try:
         social_oauth.finish_authorization(platform, state or '', code or '')
         return RedirectResponse(
-            f'{settings.FRONTEND_URL}/social/overview?social_connection=connected&platform={platform}',
+            f'{frontend_url}/social/overview?social_connection=connected&platform={platform}',
             status_code=303,
         )
     except HTTPException:
         logger.exception('Social OAuth callback failed for %s', platform)
         return RedirectResponse(
-            f'{settings.FRONTEND_URL}/social/overview?social_connection=failed&platform={platform}',
+            f'{frontend_url}/social/overview?social_connection=failed&platform={platform}',
             status_code=303,
         )
 

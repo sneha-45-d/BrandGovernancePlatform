@@ -610,9 +610,21 @@ export default function SocialIntelligencePage({ section = 'overview' }) {
     setError('')
     try {
       const { data } = await axios.get(`/api/social/integrations/${platform}/connect`)
-      window.location.assign(data.authorization_url)
+      if (data.status === 'connected') {
+        setNotice(data.message || `Connected ${platform} brand account successfully.`)
+        try {
+          const { data: configData } = await axios.get('/api/social/config', { params: currentUserParams })
+          setConnections(configData.platforms || [])
+        } catch (_) {}
+        try {
+          await axios.post(`/api/social/integrations/${platform}/sync`)
+        } catch (_) {}
+      } else if (data.authorization_url) {
+        window.location.assign(data.authorization_url)
+      }
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, 'Unable to start platform authorization.'))
+    } finally {
       setWorking(false)
     }
   }
