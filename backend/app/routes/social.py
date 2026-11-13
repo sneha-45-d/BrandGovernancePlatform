@@ -122,6 +122,20 @@ class CreatePostInput(BaseModel):
     auto_audit: bool = True
 
 
+class ImportPostInput(BaseModel):
+    user_id: str | None = None
+    platform: Literal['instagram', 'facebook', 'youtube', 'x', 'linkedin', 'manual'] = 'instagram'
+    caption: str = Field(default='', max_length=10_000)
+    media_url: str = Field(default='', max_length=2048)
+    media_type: str = Field(default='post', max_length=50)
+    permalink: str = Field(default='', max_length=2048)
+    views: int = Field(default=0, ge=0)
+    likes: int = Field(default=0, ge=0)
+    comments: int = Field(default=0, ge=0)
+    shares: int = Field(default=0, ge=0)
+    auto_audit: bool = True
+
+
 @router.get('/social/overview')
 def get_social_overview(
     days: int = Query(default=30, ge=7, le=90),
@@ -138,9 +152,13 @@ def get_social_overview(
         raise HTTPException(status_code=422, detail='End date must be on or after the start date.')
     if start_date and end_date and (end_date - start_date).days > 365:
         raise HTTPException(status_code=422, detail='Custom date ranges cannot exceed 366 days.')
-    return _storage_call(lambda: social_intelligence.build_overview(
+    overview_data = _storage_call(lambda: social_intelligence.build_overview(
         scoped_user_id, days, platform, start_date, end_date,
     ))
+    posts = _storage_call(lambda: social_store.list_posts(scoped_user_id, limit=200))
+    cross_overview, _, _ = strategy_engine.compute_cross_platform_metrics(posts)
+    overview_data['cross_platform_overview'] = cross_overview
+    return overview_data
 
 
 @router.get('/social/config')
@@ -708,6 +726,73 @@ async def create_social_post(
     }
 
 
+@router.post('/social/posts/import', status_code=201)
+async def import_social_post(
+    payload: ImportPostInput,
+    current_user: dict = Depends(get_authenticated_user),
+):
+    scoped_user_id = verify_user_scope(current_user, payload.user_id)
+    caption = (payload.caption or '').strip()
+    media_url = (payload.media_url or '').strip()
+    platform = payload.platform
+
+    if payload.permalink and ('http://' in payload.permalink or 'https://' in payload.permalink):
+        det_plat, _ = parse_profile_url(payload.permalink, fallback_platform=platform)
+        if det_plat in ('instagram', 'facebook', 'youtube', 'x', 'linkedin'):
+            platform = det_plat
+        if not caption or not media_url:
+            try:
+                import httpx
+                headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+                async with httpx.AsyncClient(timeout=5) as client:
+                    resp = await client.get(payload.permalink, headers=headers, follow_redirects=True)
+                    if resp.status_code == 200:
+                        text = resp.text
+                        desc_m = re.search(r'property=["\']og:description["\'][^>]+content=["\'](.*?)["\']', text, re.I) or re.search(r'name=["\']description["\'][^>]+content=["\'](.*?)["\']', text, re.I)
+                        img_m = re.search(r'property=["\']og:image["\'][^>]+content=["\'](.*?)["\']', text, re.I)
+                        if not caption and desc_m:
+                            caption = desc_m.group(1).strip()
+                        if not media_url and img_m:
+                            media_url = img_m.group(1).strip()
+            except Exception as e:
+                logger.info('Could not fetch open graph metadata from post URL %s: %s', payload.permalink, e)
+
+    metrics = {
+        'views': max(0, int(payload.views)),
+        'likes': max(0, int(payload.likes)),
+        'comments': max(0, int(payload.comments)),
+        'shares': max(0, int(payload.shares)),
+    }
+    eng_rate = platform_fetcher.calculate_engagement_rate(metrics)
+    metrics['engagement_rate'] = eng_rate
+
+    post_dict = {
+        'platform': platform,
+        'external_id': f"import_{int(datetime.now(timezone.utc).timestamp())}_{secrets.token_hex(4)}",
+        'caption': caption or f"Post imported from {platform.title()}",
+        'media_url': media_url,
+        'media_type': payload.media_type or 'post',
+        'permalink': payload.permalink,
+        'published_at': datetime.now(timezone.utc).isoformat(),
+        'metrics': metrics,
+        'audit_status': 'unaudited',
+    }
+    saved = _storage_call(lambda: social_store.save_post(scoped_user_id, post_dict))
+
+    if payload.auto_audit:
+        try:
+            audit_res = await post_auditor.audit_and_save_post(scoped_user_id, saved['id'])
+            saved['audit_result'] = audit_res.get('audit_result')
+            saved['audit_status'] = 'audited'
+        except Exception as exc:
+            logger.warning('Auto-audit failed for imported post %s: %s', saved['id'], exc)
+
+    return {
+        'message': f"Post imported and analyzed successfully on {platform.title()}.",
+        'post': saved,
+    }
+
+
 @router.get('/social/posts/audit-summary')
 def get_posts_audit_summary(
     user_id: str | None = Query(default=None),
@@ -729,6 +814,19 @@ def get_single_social_post(
     if not post:
         raise HTTPException(status_code=404, detail='Post not found.')
     return {'post': post}
+
+
+@router.delete('/social/posts/{post_id}')
+def delete_social_post(
+    post_id: str,
+    user_id: str | None = Query(default=None),
+    current_user: dict = Depends(get_authenticated_user),
+):
+    scoped_user_id = verify_user_scope(current_user, user_id)
+    deleted = _storage_call(lambda: social_store.delete_post(scoped_user_id, post_id))
+    if not deleted:
+        raise HTTPException(status_code=404, detail='Post not found or already deleted.')
+    return {'message': 'Post removed successfully.', 'post_id': post_id}
 
 
 @router.post('/social/posts/{post_id}/audit')

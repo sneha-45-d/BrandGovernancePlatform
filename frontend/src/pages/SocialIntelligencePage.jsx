@@ -349,6 +349,17 @@ export default function SocialIntelligencePage({ section = 'overview' }) {
       .finally(() => setCompetitorAnalysisLoading(false))
   }
 
+  const handleDeletePost = async (postId) => {
+    try {
+      await axios.delete(`/api/social/posts/${postId}`, { params: currentUserParams })
+      setNotice('Post removed successfully.')
+      fetchPosts()
+      if (section === 'strategy') fetchStrategy()
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to remove post.'))
+    }
+  }
+
   useEffect(() => {
     if (['overview', 'audit'].includes(section)) {
       fetchPosts()
@@ -758,6 +769,46 @@ export default function SocialIntelligencePage({ section = 'overview' }) {
                 <MetricCard label="Reputation score" value={metrics?.reputation_score == null ? '—' : `${metrics.reputation_score}%`} detail="Positive share of AI-classified mentions" icon={ShieldAlert} tint="amber" />
               </div>
 
+              {overview?.cross_platform_overview && overview.cross_platform_overview.total_analyzed_posts > 0 && (
+                <div className="mb-5 rounded-2xl border border-emerald-200/80 bg-gradient-to-r from-emerald-50/70 via-white to-blue-50/40 p-5 shadow-sm space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-emerald-600" /> Combined Cross-Platform Engagement Summary
+                    </h3>
+                    <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-100/70 rounded-full px-2.5 py-0.5">
+                      {overview.cross_platform_overview.total_analyzed_posts} Total Posts Monitored
+                    </span>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                    <div className="rounded-xl bg-white p-3 border border-slate-100 shadow-sm">
+                      <p className="text-[11px] font-medium text-slate-500">Cross-Platform Views</p>
+                      <p className="text-xl font-bold text-slate-900 mt-1">{(overview.cross_platform_overview.total_views || 0).toLocaleString()}</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Combined audience reach</p>
+                    </div>
+                    <div className="rounded-xl bg-white p-3 border border-slate-100 shadow-sm">
+                      <p className="text-[11px] font-medium text-slate-500">Total Likes</p>
+                      <p className="text-xl font-bold text-rose-600 mt-1">{(overview.cross_platform_overview.total_likes || 0).toLocaleString()}</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Audience reactions</p>
+                    </div>
+                    <div className="rounded-xl bg-white p-3 border border-slate-100 shadow-sm">
+                      <p className="text-[11px] font-medium text-slate-500">Total Comments</p>
+                      <p className="text-xl font-bold text-blue-600 mt-1">{(overview.cross_platform_overview.total_comments || 0).toLocaleString()}</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Community discussions</p>
+                    </div>
+                    <div className="rounded-xl bg-white p-3 border border-slate-100 shadow-sm">
+                      <p className="text-[11px] font-medium text-slate-500">Avg Engagement Rate</p>
+                      <p className="text-xl font-bold text-emerald-600 mt-1">{overview.cross_platform_overview.average_engagement_rate ? `${overview.cross_platform_overview.average_engagement_rate}%` : '0.0%'}</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Interaction percentage</p>
+                    </div>
+                    <div className="rounded-xl bg-white p-3 border border-slate-100 shadow-sm">
+                      <p className="text-[11px] font-medium text-slate-500">Top Performing Channel</p>
+                      <p className="text-lg font-bold text-slate-900 uppercase mt-1">{overview.cross_platform_overview.best_performing_platform || 'None'}</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Highest engagement velocity</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="mb-5 flex flex-wrap gap-2.5">
                 <Link to="/social/audit" className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white hover:bg-slate-800 transition">
                   <ShieldAlert className="h-4 w-4 text-emerald-400" /> Open Post Audit & False Marketing Monitor &rarr;
@@ -873,6 +924,7 @@ export default function SocialIntelligencePage({ section = 'overview' }) {
                 postsLoading={postsLoading}
                 auditSummary={auditSummary}
                 onRefresh={fetchPosts}
+                onDeletePost={handleDeletePost}
                 connections={connections}
               />
             </>
@@ -890,6 +942,7 @@ export default function SocialIntelligencePage({ section = 'overview' }) {
                 strategy={strategy}
                 loading={strategyLoading}
                 onRefresh={fetchStrategy}
+                onDeletePost={handleDeletePost}
               />
             </>
           )}

@@ -1,4 +1,5 @@
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -227,122 +228,79 @@ async def fetch_linkedin_posts(access_token: str, limit: int = 25) -> list[dict[
         return posts
 
 
-def get_sandbox_posts(
-    platform: str,
-    account_name: str | None = None,
-    profile_meta: dict | None = None,
-    profile_url: str | None = None,
-) -> list[dict[str, Any]]:
-    now = datetime.now(timezone.utc).isoformat()
-    handle = account_name or '@brand'
-    meta = profile_meta or {}
-    bio = meta.get('description') or 'Empowering modern marketing teams with automated brand consistency checks. Clean design, clear messaging, trustworthy presence.'
-    img = meta.get('image') or 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe'
-    base_link = profile_url or f'https://{platform}.com/{handle.lstrip("@")}'
+def calculate_engagement_rate(metrics: dict[str, Any]) -> float:
+    """Calculate normalized engagement rate percentage based on interactions and views."""
+    views = int(metrics.get('views') or 0)
+    likes = int(metrics.get('likes') or 0)
+    comments = int(metrics.get('comments') or 0)
+    shares = int(metrics.get('shares') or metrics.get('retweets') or 0)
+    interactions = likes + (comments * 2) + (shares * 3)
 
-    samples = {
-        'instagram': [
-            {
-                'platform': 'instagram',
-                'external_id': f'ig_{int(datetime.now().timestamp())}_1',
-                'caption': f'Official announcement from {handle}: Our new Brand AI governance platform guarantees 100% cure for all compliance risks with zero risk and instant ROI overnight! #Marketing #Growth',
-                'media_url': img,
-                'media_type': 'image',
-                'permalink': f'{base_link}/p/1',
+    if views > 0:
+        return round((interactions / views) * 100, 2)
+    if interactions > 0:
+        # Standardized engagement index when view count is private or unavailable
+        return round(min(interactions / 10.0, 15.0), 2)
+    return 0.0
+
+
+async def extract_public_posts_from_url(
+    platform: str,
+    handle: str,
+    profile_url: str | None = None,
+    profile_meta: dict | None = None,
+) -> list[dict[str, Any]]:
+    """Attempt to extract real public post or reel data from public URLs and OpenGraph metadata.
+
+    NEVER returns hardcoded fake posts. If no post is found, returns an empty list.
+    """
+    posts = []
+    meta = profile_meta or {}
+    now = datetime.now(timezone.utc).isoformat()
+
+    # If the provided URL is a direct post link (e.g. /p/ID, /status/ID, /watch?v=ID)
+    if profile_url:
+        is_direct_post = any(kw in profile_url for kw in ('/p/', '/reel/', '/status/', '/watch', '/posts/', '/update/'))
+        if is_direct_post and meta.get('description'):
+            external_id = re.sub(r'[^a-zA-Z0-9_-]', '', profile_url.rstrip('/').split('/')[-1]) or f'{platform}_{int(datetime.now().timestamp())}'
+            metrics = {
+                'views': int(meta.get('views', 0) or 0),
+                'likes': int(meta.get('likes', 0) or 0),
+                'comments': int(meta.get('comments', 0) or 0),
+                'shares': 0,
+            }
+            metrics['engagement_rate'] = calculate_engagement_rate(metrics)
+
+            posts.append({
+                'platform': platform,
+                'external_id': external_id,
+                'caption': meta.get('description') or meta.get('title') or f"Post from {handle}",
+                'media_url': meta.get('image', ''),
+                'media_type': 'video' if ('video' in profile_url or platform == 'youtube') else 'image',
+                'permalink': profile_url,
                 'published_at': now,
-                'metrics': {'likes': 420, 'comments': 38},
-            },
-            {
-                'platform': 'instagram',
-                'external_id': f'ig_{int(datetime.now().timestamp())}_2',
-                'caption': f'{handle}: {bio}',
-                'media_url': 'https://images.unsplash.com/photo-1551836022-d5d88e9218df',
-                'media_type': 'image',
-                'permalink': f'{base_link}/p/2',
+                'metrics': metrics,
+            })
+            return posts
+
+    # If real profile description/bio exists, ingest it as the brand's official profile statement
+    if meta.get('description') and len(meta.get('description', '').strip()) > 15:
+        bio_text = meta.get('description', '').strip()
+        # Avoid generic social network titles
+        if not bio_text.startswith(('See Instagram photos', 'Log in', 'Welcome back', 'Sign up')):
+            metrics = {'views': 0, 'likes': 0, 'comments': 0, 'shares': 0, 'engagement_rate': 0.0}
+            posts.append({
+                'platform': platform,
+                'external_id': f"{platform}_profile_statement_{handle.lstrip('@')}",
+                'caption': f"[{handle.upper()} Profile Statement]\n{bio_text}",
+                'media_url': meta.get('image', ''),
+                'media_type': 'text',
+                'permalink': profile_url or f"https://{platform}.com/{handle.lstrip('@')}",
                 'published_at': now,
-                'metrics': {'likes': 890, 'comments': 54},
-            },
-        ],
-        'x': [
-            {
-                'platform': 'x',
-                'external_id': f'x_{int(datetime.now().timestamp())}_1',
-                'caption': f'{handle}: Don\'t be fooled by legacy tools—our competitors are scammers and slow. Switch to our platform today or regret it!',
-                'media_url': '',
-                'media_type': 'post',
-                'permalink': f'{base_link}/status/101',
-                'published_at': now,
-                'metrics': {'likes': 120, 'retweets': 45},
-            },
-            {
-                'platform': 'x',
-                'external_id': f'x_{int(datetime.now().timestamp())}_2',
-                'caption': f'{handle}: {bio}',
-                'media_url': '',
-                'media_type': 'post',
-                'permalink': f'{base_link}/status/102',
-                'published_at': now,
-                'metrics': {'likes': 670, 'retweets': 112},
-            },
-        ],
-        'facebook': [
-            {
-                'platform': 'facebook',
-                'external_id': f'fb_{int(datetime.now().timestamp())}_1',
-                'caption': f'{handle}: Best in the world, 100% doctor approved, cures all marketing headaches permanently with guaranteed results!',
-                'media_url': '',
-                'media_type': 'post',
-                'permalink': f'{base_link}/posts/201',
-                'published_at': now,
-                'metrics': {'likes': 310, 'comments': 28},
-            },
-            {
-                'platform': 'facebook',
-                'external_id': f'fb_{int(datetime.now().timestamp())}_2',
-                'caption': f'{handle}: {bio}',
-                'media_url': '',
-                'media_type': 'post',
-                'permalink': f'{base_link}/posts/202',
-                'published_at': now,
-                'metrics': {'likes': 410, 'comments': 45},
-            },
-        ],
-        'youtube': [
-            {
-                'platform': 'youtube',
-                'external_id': f'yt_{int(datetime.now().timestamp())}_1',
-                'caption': f'{handle} Walkthrough: How to audit your social media posts for false marketing and compliance before publishing.',
-                'media_url': 'https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d',
-                'media_type': 'video',
-                'permalink': f'{base_link}/videos',
-                'published_at': now,
-                'metrics': {'views': 1250, 'likes': 95, 'comments': 14},
-            },
-        ],
-        'linkedin': [
-            {
-                'platform': 'linkedin',
-                'external_id': f'li_{int(datetime.now().timestamp())}_1',
-                'caption': f'{handle} Insights: Brand safety isn\'t optional in 2026. How modern CMOs are enforcing brand guidelines and detecting false marketing proactively.',
-                'media_url': '',
-                'media_type': 'post',
-                'permalink': f'{base_link}/updates/1',
-                'published_at': now,
-                'metrics': {'likes': 540, 'comments': 42},
-            },
-            {
-                'platform': 'linkedin',
-                'external_id': f'li_{int(datetime.now().timestamp())}_2',
-                'caption': f'{handle}: {bio}',
-                'media_url': '',
-                'media_type': 'post',
-                'permalink': f'{base_link}/updates/2',
-                'published_at': now,
-                'metrics': {'likes': 380, 'comments': 28},
-            },
-        ],
-    }
-    return samples.get(platform, samples['x'])
+                'metrics': metrics,
+            })
+
+    return posts
 
 
 async def sync_platform_posts(
@@ -364,12 +322,15 @@ async def sync_platform_posts(
         if account:
             account_name = account.get('account_name')
 
-    if token.startswith(('sandbox_', 'direct_', 'mock_', 'profile_')):
-        raw_posts = get_sandbox_posts(
+    handle = account_name or '@brand'
+
+    if token.startswith(('profile_', 'direct_', 'sandbox_', 'mock_')):
+        # Real extraction from public URL / OpenGraph metadata without fake data
+        raw_posts = await extract_public_posts_from_url(
             platform,
-            account_name=account_name,
-            profile_meta=profile_meta,
+            handle=handle,
             profile_url=profile_url,
+            profile_meta=profile_meta,
         )
     else:
         fetcher_map = {
@@ -401,6 +362,10 @@ async def sync_platform_posts(
 
     saved_posts = []
     for p in raw_posts:
+        # Calculate dynamic engagement rate for every post
+        metrics = p.get('metrics') or {}
+        metrics['engagement_rate'] = calculate_engagement_rate(metrics)
+        p['metrics'] = metrics
         saved = social_store.save_post(user_id, p)
         saved_posts.append(saved)
 
@@ -408,5 +373,6 @@ async def sync_platform_posts(
         'platform': platform,
         'synced_count': len(saved_posts),
         'posts': saved_posts,
+        'message': f"Synced {len(saved_posts)} real posts from {platform.title()} ({handle})." if saved_posts else f"{platform.title()} ({handle}) is connected. Use 'Import Post' to analyze specific posts or provide live post links."
     }
 

@@ -1000,6 +1000,19 @@ def update_post_audit(user_id, post_id, audit_result, audit_status='audited'):
     return _try_mongo(mongo, local)
 
 
+def delete_post(user_id, post_id):
+    def mongo():
+        res = get_db()['social_posts'].delete_one({'user_id': user_id, 'id': post_id})
+        return res.deleted_count > 0
+
+    def local():
+        with local_store._connect() as connection:
+            res = connection.execute('DELETE FROM social_posts WHERE user_id = ? AND id = ?', (user_id, post_id))
+        return res.rowcount > 0
+
+    return _try_mongo(mongo, local)
+
+
 def get_audit_summary(user_id):
     posts = list_posts(user_id, limit=500)
     total_posts = len(posts)
