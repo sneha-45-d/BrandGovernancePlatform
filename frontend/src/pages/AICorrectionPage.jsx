@@ -67,6 +67,9 @@ export default function AICorrectionPage() {
 
       setResult(response.data)
       localStorage.setItem(getUserStorageKey('brandithm-correction-content'), content)
+      setTimeout(() => {
+        document.getElementById('correction-results')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 120)
     } catch (requestError) {
       setError(getApiErrorMessage(
         requestError,
@@ -228,7 +231,7 @@ export default function AICorrectionPage() {
             </div>
 
             {result && (
-              <section className="space-y-6">
+              <section id="correction-results" className="space-y-6 pt-2">
                 <div className="grid gap-6 xl:grid-cols-2">
                   <div className="surface-panel rounded-[2rem] p-6 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
                     <div className="mb-4 flex items-center gap-3">
