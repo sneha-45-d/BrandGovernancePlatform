@@ -1013,6 +1013,25 @@ def delete_post(user_id, post_id):
     return _try_mongo(mongo, local)
 
 
+def delete_all_posts(user_id, platform=None):
+    def mongo():
+        query = {'user_id': user_id}
+        if platform:
+            query['platform'] = platform
+        res = get_db()['social_posts'].delete_many(query)
+        return res.deleted_count
+
+    def local():
+        with local_store._connect() as connection:
+            if platform:
+                res = connection.execute('DELETE FROM social_posts WHERE user_id = ? AND platform = ?', (user_id, platform))
+            else:
+                res = connection.execute('DELETE FROM social_posts WHERE user_id = ?', (user_id,))
+        return res.rowcount
+
+    return _try_mongo(mongo, local)
+
+
 def get_audit_summary(user_id):
     posts = list_posts(user_id, limit=500)
     total_posts = len(posts)

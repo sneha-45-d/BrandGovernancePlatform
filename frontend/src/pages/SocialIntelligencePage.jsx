@@ -629,6 +629,8 @@ export default function SocialIntelligencePage({ section = 'overview' }) {
           const { data: configData } = await axios.get('/api/social/config', { params: currentUserParams })
           setConnections(configData.platforms || [])
         } catch (_) {}
+        fetchPosts()
+        fetchOverview()
       } else {
         const { data } = await axios.get(`/api/social/integrations/${platform}/connect`)
         if (data.status === 'connected') {
@@ -640,6 +642,8 @@ export default function SocialIntelligencePage({ section = 'overview' }) {
           try {
             await axios.post(`/api/social/integrations/${platform}/sync`)
           } catch (_) {}
+          fetchPosts()
+          fetchOverview()
         } else if (data.authorization_url) {
           window.location.assign(data.authorization_url)
         }

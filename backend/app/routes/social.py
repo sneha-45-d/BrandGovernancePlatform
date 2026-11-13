@@ -138,6 +138,13 @@ class ImportPostInput(BaseModel):
     auto_audit: bool = True
 
 
+class BulkImportInput(BaseModel):
+    user_id: str | None = None
+    platform: Literal['instagram', 'facebook', 'youtube', 'x', 'linkedin', 'manual'] = 'instagram'
+    urls: list[str] = Field(default_factory=list)
+    auto_audit: bool = True
+
+
 @router.get('/social/overview')
 def get_social_overview(
     days: int = Query(default=30, ge=7, le=90),
@@ -821,6 +828,105 @@ async def import_social_post(
         'message': f"Post imported and analyzed successfully on {platform.title()}.",
         'post': saved,
     }
+
+
+@router.post('/social/posts/bulk-import', status_code=201)
+async def bulk_import_posts(
+    payload: BulkImportInput,
+    current_user: dict = Depends(get_authenticated_user),
+):
+    scoped_user_id = verify_user_scope(current_user, payload.user_id)
+    imported = []
+    import httpx
+
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+    async with httpx.AsyncClient(timeout=8.0, headers=headers) as client:
+        for raw_url in payload.urls[:30]:
+            url = raw_url.strip()
+            if not url:
+                continue
+
+            plat = payload.platform
+            if 'instagram.com' in url:
+                plat = 'instagram'
+            elif 'youtube.com' in url or 'youtu.be' in url:
+                plat = 'youtube'
+            elif 'x.com' in url or 'twitter.com' in url:
+                plat = 'x'
+            elif 'facebook.com' in url:
+                plat = 'facebook'
+            elif 'linkedin.com' in url:
+                plat = 'linkedin'
+
+            caption = ''
+            media_url = ''
+            media_type = 'video' if any(kw in url.lower() for kw in ('/reel/', '/watch', '/shorts/', 'video')) else 'image'
+
+            try:
+                resp = await client.get(url, follow_redirects=True)
+                if resp.status_code == 200:
+                    text = resp.text
+                    desc_m = re.search(r'property=["\']og:description["\'][^>]+content=["\'](.*?)["\']', text, re.I) or re.search(r'name=["\']description["\'][^>]+content=["\'](.*?)["\']', text, re.I)
+                    img_m = re.search(r'property=["\']og:image["\'][^>]+content=["\'](.*?)["\']', text, re.I)
+                    title_m = re.search(r'<title>(.*?)</title>', text, re.I)
+                    if desc_m:
+                        caption = desc_m.group(1).strip()
+                    elif title_m:
+                        caption = title_m.group(1).strip()
+                    if img_m:
+                        media_url = img_m.group(1).strip()
+            except Exception as scrape_err:
+                logger.info('Could not scrape URL %s: %s', url, scrape_err)
+
+            if not caption:
+                caption = f"Post imported from {plat.title()} ({url})"
+
+            metrics = {
+                'views': 0,
+                'likes': 0,
+                'comments': 0,
+                'shares': 0,
+                'engagement_rate': 0.0,
+            }
+            post_dict = {
+                'platform': plat,
+                'external_id': f"bulk_{int(datetime.now(timezone.utc).timestamp())}_{secrets.token_hex(4)}",
+                'caption': caption,
+                'media_url': media_url,
+                'media_type': media_type,
+                'permalink': url,
+                'published_at': datetime.now(timezone.utc).isoformat(),
+                'metrics': metrics,
+                'audit_status': 'unaudited',
+            }
+            saved = _storage_call(lambda: social_store.save_post(scoped_user_id, post_dict))
+
+            if payload.auto_audit:
+                try:
+                    audit_res = await post_auditor.audit_and_save_post(scoped_user_id, saved['id'])
+                    saved['audit_result'] = audit_res.get('audit_result')
+                    saved['audit_status'] = 'audited'
+                except Exception as exc:
+                    logger.warning('Auto-audit failed for bulk imported post %s: %s', saved['id'], exc)
+
+            imported.append(saved)
+
+    return {
+        'message': f"Imported and analyzed {len(imported)} posts successfully.",
+        'imported_count': len(imported),
+        'posts': imported,
+    }
+
+
+@router.delete('/social/posts/clear-all')
+def clear_all_social_posts(
+    platform: str | None = Query(default=None),
+    user_id: str | None = Query(default=None),
+    current_user: dict = Depends(get_authenticated_user),
+):
+    scoped_user_id = verify_user_scope(current_user, user_id)
+    deleted = _storage_call(lambda: social_store.delete_all_posts(scoped_user_id, platform=platform))
+    return {'message': f'Removed {deleted} posts.', 'deleted_count': deleted}
 
 
 @router.get('/social/posts/audit-summary')

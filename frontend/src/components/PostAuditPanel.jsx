@@ -40,6 +40,9 @@ export default function PostAuditPanel({
   connections = [],
 }) {
   const [showAddModal, setShowAddModal] = useState(false)
+  const [importMode, setImportMode] = useState('single') // 'single' | 'bulk'
+  const [bulkUrls, setBulkUrls] = useState('')
+  const [bulkPlatform, setBulkPlatform] = useState('instagram')
   const [newPost, setNewPost] = useState({
     platform: 'instagram',
     media_type: 'image',
@@ -67,6 +70,55 @@ export default function PostAuditPanel({
     navigator.clipboard.writeText(text)
     setCopiedId(id)
     setTimeout(() => setCopiedId(null), 2500)
+  }
+
+  const handleClearAll = async () => {
+    if (!window.confirm('Are you sure you want to remove all monitored posts? This will delete any old or sample posts and give you a fresh dashboard.')) return
+    setSubmitting(true)
+    setError('')
+    try {
+      const { data } = await axios.delete('/api/social/posts/clear-all', {
+        params: { user_id: getCurrentUserId() },
+      })
+      setSuccess(data.message || 'All posts removed.')
+      onRefresh()
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to clear posts.'))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleBulkImport = async (e) => {
+    e.preventDefault()
+    const urls = bulkUrls
+      .split('\n')
+      .map((u) => u.trim())
+      .filter((u) => u.length > 5)
+
+    if (!urls.length) {
+      setError('Please enter at least one valid post or reel URL.')
+      return
+    }
+
+    setSubmitting(true)
+    setError('')
+    try {
+      const { data } = await axios.post('/api/social/posts/bulk-import', {
+        platform: bulkPlatform,
+        urls,
+        auto_audit: true,
+        user_id: getCurrentUserId(),
+      })
+      setSuccess(data.message || `Successfully imported and audited ${data.imported_count} posts!`)
+      setShowAddModal(false)
+      setBulkUrls('')
+      onRefresh()
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to bulk import posts.'))
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const handleFileChange = (e) => {
@@ -360,6 +412,19 @@ export default function PostAuditPanel({
         </div>
 
         <div className="flex items-center gap-2">
+          {posts.length > 0 && (
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={handleClearAll}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 transition"
+              title="Clear all posts to start fresh"
+            >
+              <Trash2 className="h-3.5 w-3.5 text-rose-500" />
+              Clear All ({posts.length})
+            </button>
+          )}
+
           {auditSummary?.unaudited_count > 0 && (
             <button
               type="button"
@@ -401,6 +466,84 @@ export default function PostAuditPanel({
             </button>
           </div>
 
+          <div className="mt-4 flex gap-2 border-b border-emerald-200/60 pb-3">
+            <button
+              type="button"
+              onClick={() => setImportMode('single')}
+              className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+                importMode === 'single'
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-white text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              Single Post / File Upload
+            </button>
+            <button
+              type="button"
+              onClick={() => setImportMode('bulk')}
+              className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+                importMode === 'bulk'
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-white text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              Bulk Import Multiple Links
+            </button>
+          </div>
+
+          {importMode === 'bulk' ? (
+            <form onSubmit={handleBulkImport} className="mt-4 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700">Platform</label>
+                <select
+                  value={bulkPlatform}
+                  onChange={(e) => setBulkPlatform(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800"
+                >
+                  <option value="instagram">Instagram</option>
+                  <option value="youtube">YouTube</option>
+                  <option value="x">X / Twitter</option>
+                  <option value="facebook">Facebook</option>
+                  <option value="linkedin">LinkedIn</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700">
+                  Paste Post Links (One URL per line)
+                </label>
+                <p className="text-[11px] text-slate-500 mb-1">
+                  Paste links to your reels, pictures, and posts from your social handle. The system retrieves real OpenGraph metadata, media visuals, and runs AI audits on each.
+                </p>
+                <textarea
+                  rows={5}
+                  required
+                  placeholder={`https://www.instagram.com/p/ABC123/\nhttps://www.instagram.com/reel/XYZ456/\nhttps://www.instagram.com/p/789DEF/`}
+                  value={bulkUrls}
+                  onChange={(e) => setBulkUrls(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-slate-200 bg-white p-3 font-mono text-xs text-slate-800"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700"
+                >
+                  {submitting && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
+                  Import & Audit All Links
+                </button>
+              </div>
+            </form>
+          ) : (
           <form onSubmit={handleImportPost} className="mt-4 space-y-4">
             {/* Media Format Selector */}
             <div>
@@ -668,6 +811,7 @@ export default function PostAuditPanel({
               </div>
             </div>
           </form>
+          )}
         </div>
       )}
 

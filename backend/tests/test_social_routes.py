@@ -338,5 +338,36 @@ class SocialRouteTests(unittest.TestCase):
         self.assertEqual(bad_url.status_code, 422)
 
 
+    def test_bulk_import_and_clear_all_posts(self):
+        # 1. Bulk import multiple post URLs
+        urls = [
+            'https://www.instagram.com/p/test12345/',
+            'https://www.youtube.com/watch?v=samplevideo',
+        ]
+        resp = self.client.post('/api/social/posts/bulk-import', json={
+            'user_id': self.user_id,
+            'platform': 'instagram',
+            'urls': urls,
+            'auto_audit': False,
+        })
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.json()['imported_count'], 2)
+
+        # Verify posts listed
+        list_resp = self.client.get('/api/social/posts', params={'user_id': self.user_id})
+        self.assertEqual(list_resp.status_code, 200)
+        self.assertEqual(len(list_resp.json()['posts']), 2)
+
+        # 2. Clear all posts
+        clear_resp = self.client.delete('/api/social/posts/clear-all', params={'user_id': self.user_id})
+        self.assertEqual(clear_resp.status_code, 200)
+        self.assertEqual(clear_resp.json()['deleted_count'], 2)
+
+        # Verify empty
+        after_clear = self.client.get('/api/social/posts', params={'user_id': self.user_id})
+        self.assertEqual(after_clear.status_code, 200)
+        self.assertEqual(len(after_clear.json()['posts']), 0)
+
+
 if __name__ == '__main__':
     unittest.main()
