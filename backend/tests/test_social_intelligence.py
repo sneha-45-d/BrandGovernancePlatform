@@ -33,7 +33,10 @@ class SocialIntelligenceTests(unittest.TestCase):
     def tearDown(self):
         self.mongo_patch.stop()
         self.database_path_patch.stop()
-        self.temp_dir.cleanup()
+        try:
+            self.temp_dir.cleanup()
+        except Exception:
+            pass
 
     def _save_config(self):
         return social_store.save_config(

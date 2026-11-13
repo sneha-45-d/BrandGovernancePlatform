@@ -29,7 +29,7 @@ const statusLabels = {
 function getStatusClass(status) {
   if (status === 'approved') return 'bg-emerald-100 text-emerald-800'
   if (status === 'revision_requested') return 'bg-amber-100 text-amber-800'
-  return 'bg-emerald-100 text-emerald-800'
+  return 'bg-sky-100 text-sky-800'
 }
 
 export default function ReviewQueuePage() {

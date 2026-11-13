@@ -196,7 +196,7 @@ export default function CompetitorManagePage() {
                   disabled={simLoading || !simText.trim()}
                   className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
                 >
-                  {simLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : '                  Check for clashes'}
+                  {simLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Check for clashes'}
                 </button>
               </div>
 

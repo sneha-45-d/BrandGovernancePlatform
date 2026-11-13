@@ -23,7 +23,7 @@ export default function AccountSettingsPage() {
     try {
       const updates = { full_name: fullName.trim(), email: email.trim() }
       let updatedUser
-      if (user.localOnly) {
+      if (user?.localOnly) {
         updatedUser = updateLocalAccount(user, updates)
       } else {
         const { data } = await axios.patch('/api/auth/me', updates, {

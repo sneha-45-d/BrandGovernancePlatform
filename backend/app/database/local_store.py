@@ -203,30 +203,37 @@ def _init_db(connection):
         pass
 
 
-_db_initialized = False
+_initialized_paths = set()
 
 
-def ensure_db_ready():
-    global _db_initialized
-    if _db_initialized:
+def ensure_db_ready(target_path: Path | str | None = None):
+    db_path = Path(target_path or settings.LOCAL_DB_PATH)
+    try:
+        path_key = str(db_path.resolve())
+    except Exception:
+        path_key = str(db_path)
+    if path_key in _initialized_paths:
         return
-    database_path = Path(settings.LOCAL_DB_PATH)
-    database_path.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(database_path, timeout=10) as conn:
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(db_path, timeout=10) as conn:
         conn.execute('PRAGMA journal_mode = WAL')
         conn.execute('PRAGMA synchronous = NORMAL')
         conn.execute('PRAGMA cache_size = -64000')
         conn.execute('PRAGMA temp_store = MEMORY')
         conn.execute('PRAGMA foreign_keys = ON')
         _init_db(conn)
-    _db_initialized = True
+    _initialized_paths.add(path_key)
 
 
 @contextmanager
 def _connect():
-    if not _db_initialized:
-        ensure_db_ready()
     database_path = Path(settings.LOCAL_DB_PATH)
+    try:
+        path_key = str(database_path.resolve())
+    except Exception:
+        path_key = str(database_path)
+    if path_key not in _initialized_paths:
+        ensure_db_ready(database_path)
     connection = sqlite3.connect(database_path, timeout=10)
     connection.row_factory = sqlite3.Row
     connection.execute('PRAGMA foreign_keys = ON')

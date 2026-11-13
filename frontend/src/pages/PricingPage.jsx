@@ -35,7 +35,7 @@ const compareRows = [
 
 export default function PricingPage() {
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
+    <div className="dashboard-shell min-h-screen bg-slate-50 text-slate-900">
       <header className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
         <nav className="flex items-center justify-between rounded-full border border-slate-200/80 bg-white/80 px-4 py-3 shadow-[0_18px_45px_rgba(15,23,42,0.06)] backdrop-blur-xl sm:px-5">
           <Link to="/" className="flex items-center gap-3">

@@ -592,6 +592,26 @@ body[data-theme='dark'] .auth-reference-shell .hover\:text-emerald-500:hover {
 
 
 
+body[data-theme='dark'] select option {
+  background-color: #0b1329 !important;
+  color: #f8fafc !important;
+}
+
+body[data-theme='dark'] ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+body[data-theme='dark'] ::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.6);
+}
+body[data-theme='dark'] ::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 4px;
+}
+body[data-theme='dark'] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.5);
+}
+
 @media (max-width: 1023px) {
 
   .auth-copy-panel {
@@ -2253,6 +2273,26 @@ body[data-theme='dark'] .auth-reference-shell::after { background: rgba(117, 57,
 body[data-theme='dark'] .auth-form-panel {
   background: linear-gradient(145deg, rgba(9, 20, 31, 0.9), rgba(4, 12, 22, 0.88)) !important;
   border-color: rgba(93, 202, 216, 0.16) !important;
+}
+
+body[data-theme='dark'] select option {
+  background-color: #0b1329 !important;
+  color: #f8fafc !important;
+}
+
+body[data-theme='dark'] ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+body[data-theme='dark'] ::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.6);
+}
+body[data-theme='dark'] ::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 4px;
+}
+body[data-theme='dark'] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.5);
 }
 
 @media (max-width: 1023px) {

@@ -42,7 +42,10 @@ class SocialRouteTests(unittest.TestCase):
         self.auth_override.stop()
         self.mongo_patch.stop()
         self.database_path_patch.stop()
-        self.temp_dir.cleanup()
+        try:
+            self.temp_dir.cleanup()
+        except Exception:
+            pass
 
     def test_social_endpoints_require_authentication(self):
         with patch.dict(app.dependency_overrides, {}, clear=True):

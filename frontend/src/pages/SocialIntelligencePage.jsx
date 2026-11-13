@@ -701,7 +701,7 @@ export default function SocialIntelligencePage({ section = 'overview' }) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900">
+    <div className="dashboard-shell min-h-screen bg-slate-100 text-slate-900">
       <div className="mx-auto grid max-w-[1500px] gap-5 px-4 py-5 lg:grid-cols-[17rem_minmax(0,1fr)] lg:px-6">
         <Sidebar />
         <main className="min-w-0">
