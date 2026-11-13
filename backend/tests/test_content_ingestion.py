@@ -200,6 +200,69 @@ class ContentIngestionTests(unittest.TestCase):
         self.assertEqual(result['claim_checks'][0]['evidence_status'], 'not provided')
         self.assertEqual(result['audience_fit']['assessment'], 'mixed')
 
+    def test_full_content_review_requests_structured_evidence_and_context(self):
+        response_data = {
+            'overall_score': 74,
+            'brand_compliance_score': 72,
+            'tone_consistency': 78,
+            'grammar_score': 96,
+            'readability_score': 81,
+            'audience_fit': {'assessment': 'mixed', 'explanation': 'The audience is supplied but not addressed directly.'},
+            'channel_fit': {'assessment': 'strong', 'explanation': 'The short copy suits the stated email subject line.'},
+            'claim_checks': [{
+                'claim': 'Save 30%',
+                'risk': 'high',
+                'evidence_status': 'not provided',
+                'explanation': 'No source for the discount is included.',
+                'next_step': 'Confirm the offer with the campaign owner.',
+            }],
+            'violations': [{
+                'title': 'Unsubstantiated discount',
+                'severity': 'high',
+                'evidence': 'Save 30%',
+                'description': 'The discount lacks supporting offer details.',
+            }],
+            'critical_issues': [],
+            'recommendations': [{
+                'title': 'Verify the offer',
+                'priority': 'high',
+                'evidence': 'Save 30%',
+                'explanation': 'The promotion should match an approved offer.',
+                'next_step': 'Confirm the terms and eligible dates.',
+                'measurement': 'Match the copy against the approved campaign brief.',
+                'suggested_copy': 'Explore our current offer.',
+            }],
+            'summary': 'The message is concise, but the discount needs substantiation before publishing.',
+            'improved_content': 'Explore our current offer.',
+        }
+        client = SimpleNamespace(
+            models=SimpleNamespace(
+                generate_content=MagicMock(return_value=SimpleNamespace(text=json.dumps(response_data))),
+            ),
+        )
+
+        with patch('app.routes.content.genai.Client', return_value=client), \
+             patch('app.routes.content.settings.GOOGLE_API_KEY', 'test-key'), \
+             patch('app.routes.content.settings.GEMINI_MODEL', 'gemini-3.5-flash'):
+            result = asyncio.run(run_ai_brand_analysis(
+                'Save 30% today.',
+                'Test Brand',
+                {'target_audience': 'Returning customers'},
+                review_context={
+                    'campaign_goal': 'Re-engage customers',
+                    'channel': 'Email subject line',
+                },
+            ))
+
+        prompt = client.models.generate_content.call_args.kwargs['contents']
+        self.assertIn('Campaign objective: Re-engage customers', prompt)
+        self.assertIn('Target audience: Returning customers', prompt)
+        self.assertIn('Channel or format: Email subject line', prompt)
+        self.assertIn('"claim_checks"', prompt)
+        self.assertIn('This is not an external fact-check.', prompt)
+        self.assertEqual(result['claim_checks'][0]['next_step'], 'Confirm the offer with the campaign owner.')
+        self.assertEqual(result['channel_fit']['assessment'], 'strong')
+
     def test_brand_review_retries_supported_model_after_invalid_json(self):
         response_data = {
             'overall_score': 77,

@@ -331,13 +331,13 @@ async def run_ai_brand_analysis(
         )
 
     guideline_context = build_guideline_context(guidelines)
+    review_context = review_context or {}
+    context_lines = [
+        f"Campaign objective: {review_context.get('campaign_goal') or 'Not provided'}",
+        f"Target audience: {review_context.get('target_audience') or guidelines.get('target_audience') or 'Not provided'}",
+        f"Channel or format: {review_context.get('channel') or 'Not provided'}",
+    ]
     if quick_review:
-        review_context = review_context or {}
-        context_lines = [
-            f"Campaign objective: {review_context.get('campaign_goal') or 'Not provided'}",
-            f"Target audience: {review_context.get('target_audience') or guidelines.get('target_audience') or 'Not provided'}",
-            f"Channel or format: {review_context.get('channel') or 'Not provided'}",
-        ]
         prompt = """
 You are BRANDITHM, a senior brand, marketing, and content-governance reviewer. Give a decision-ready assessment that a real marketing team can act on before publishing.
 
@@ -395,6 +395,9 @@ Brand:
 Brand guidelines:
 {guideline_context}
 
+Campaign context:
+{review_context}
+
 Content to analyze:
 {content}
 
@@ -405,22 +408,30 @@ Return valid JSON only with the following schema:
   "tone_consistency": 0,
   "grammar_score": 0,
   "readability_score": 0,
-  "violations": [{{"title": "", "severity": "low|medium|high|critical", "description": ""}}],
-  "critical_issues": [{{"title": "", "description": "", "recommendation": ""}}],
-  "recommendations": [{{"title": "", "explanation": "", "suggested_copy": ""}}],
+  "audience_fit": {{"assessment": "strong|mixed|weak|unknown", "explanation": ""}},
+  "channel_fit": {{"assessment": "strong|mixed|weak|unknown", "explanation": ""}},
+  "claim_checks": [{{"claim": "", "risk": "high|medium|low", "evidence_status": "supported|unsupported|not provided", "explanation": "", "next_step": ""}}],
+  "violations": [{{"title": "", "severity": "low|medium|high|critical", "evidence": "", "description": ""}}],
+  "critical_issues": [{{"title": "", "description": "", "evidence": "", "recommendation": ""}}],
+  "recommendations": [{{"title": "", "priority": "high|medium|low", "evidence": "", "explanation": "", "next_step": "", "measurement": "", "suggested_copy": ""}}],
   "summary": "",
   "improved_content": ""
 }}
 
 Rules:
-- Score each metric between 0 and 100.
-- Identify real violations of tone, compliance, messaging, restricted words, or unsupported claims.
-- Explain the underlying issue and provide actionable recommendations.
-- For images, audio, video, and presentation slide images, base findings on the provided media. Do not infer unseen content.
-- Keep the improved_content version aligned with the brand voice but do not rewrite the original content automatically.
+- Score the submitted content against the supplied brand guidelines and campaign context; use integer scores from 0 to 100 and do not inflate them.
+- Review objective alignment, audience relevance, benefit clarity, claim substantiation, brand voice, restricted terms, CTA, and suitability for the stated channel. Mark audience or channel fit "unknown" when context is insufficient; do not guess.
+- Ground findings in a short exact quote or identify the specific information that is missing. Never invent product capabilities, customer outcomes, legal requirements, research, citations, or performance data.
+- For claims, assess only whether evidence was provided with this submission. "Not provided" means a human should substantiate the claim; it does not mean the claim is false. This is not an external fact-check.
+- Return only material findings and no more than 3 prioritized recommendations. Avoid generic advice and do not duplicate the same issue in multiple sections.
+- Each recommendation must explain why it matters, provide a concrete next step and a practical way to verify completion. Suggested copy must preserve the original intent without adding unsupported facts or promises.
+- Keep the summary to two or three concise sentences: verdict, main risk, and highest-priority action.
+- Rewrite improved_content only to improve clarity and brand alignment while preserving intent; do not add unverified facts.
+- For images, audio, video, PDFs, and presentation slides, base findings only on extracted text or visible/audible evidence. State when content cannot be assessed; never infer unseen material.
 """.format(
             brand_name=brand_name,
             guideline_context=guideline_context,
+            review_context='\n'.join(context_lines),
             content=content,
         )
 

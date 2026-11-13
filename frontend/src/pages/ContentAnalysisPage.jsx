@@ -68,6 +68,8 @@ export default function ContentAnalysisPage() {
   const navigate = useNavigate()
   const [guidelines, setGuidelines] = useState(defaultGuidelines)
   const [content, setContent] = useState('')
+  const [campaignGoal, setCampaignGoal] = useState('')
+  const [channel, setChannel] = useState('')
   const [selectedFile, setSelectedFile] = useState(null)
   const [loading, setLoading] = useState(false)
   const [guidelinesLoading, setGuidelinesLoading] = useState(true)
@@ -183,6 +185,9 @@ export default function ContentAnalysisPage() {
       formData.append('content_title', selectedFile ? selectedFile.name : 'Marketing copy review')
       formData.append('content', content)
       formData.append('guidelines', JSON.stringify(payload))
+      formData.append('campaign_goal', campaignGoal.trim())
+      formData.append('target_audience', payload.target_audience || '')
+      formData.append('channel', channel.trim())
 
       if (selectedFile) {
         formData.append('file', selectedFile)
@@ -352,6 +357,29 @@ export default function ContentAnalysisPage() {
                       onChange={handleGuidelineChange}
                       className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
                     />
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <label className="block text-sm font-semibold text-slate-700">
+                      Campaign objective <span className="font-normal text-slate-500">(optional)</span>
+                      <input
+                        type="text"
+                        value={campaignGoal}
+                        onChange={(event) => setCampaignGoal(event.target.value)}
+                        placeholder="e.g. Increase qualified demo requests"
+                        className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-normal text-slate-900 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+                      />
+                    </label>
+                    <label className="block text-sm font-semibold text-slate-700">
+                      Channel or format <span className="font-normal text-slate-500">(optional)</span>
+                      <input
+                        type="text"
+                        value={channel}
+                        onChange={(event) => setChannel(event.target.value)}
+                        placeholder="e.g. LinkedIn ad, email, landing page"
+                        className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-normal text-slate-900 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+                      />
+                    </label>
                   </div>
 
                   <div>
@@ -568,6 +596,28 @@ export default function ContentAnalysisPage() {
                     <p className="mt-1">{analysis.warning}</p>
                   </div>
                 )}
+                <div className="surface-panel rounded-[2rem] border-l-4 border-emerald-500 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
+                  <p className="text-sm font-semibold uppercase tracking-wide text-emerald-700">Executive summary</p>
+                  <h3 className="mt-2 text-xl font-bold text-slate-950">Review decision</h3>
+                  <p className="mt-3 text-base leading-7 text-slate-700">{analysis.summary || 'No summary was returned for this analysis.'}</p>
+                  {(analysis.audience_fit || analysis.channel_fit) && (
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      {[
+                        ['Audience fit', analysis.audience_fit],
+                        ['Channel fit', analysis.channel_fit],
+                      ].filter(([, fit]) => fit).map(([label, fit]) => (
+                        <div key={label} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="font-semibold text-slate-800">{label}</p>
+                            <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase text-slate-600 ring-1 ring-slate-200">{fit.assessment || 'unknown'}</span>
+                          </div>
+                          {fit.explanation && <p className="mt-2 text-sm leading-6 text-slate-600">{fit.explanation}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {analysis.source_type && <p className="mt-4 text-xs uppercase tracking-wide text-slate-500">Analyzed format: {analysis.source_type}</p>}
+                </div>
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
                   {scoreCards.map(({ key, label, icon: Icon }) => (
                     <div key={key} className="surface-panel rounded-[2rem] p-5 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
@@ -593,6 +643,45 @@ export default function ContentAnalysisPage() {
                   <ToneAnalysisPanel toneData={analysis.tone_analysis} />
                 )}
 
+                {(analysis.critical_issues || []).length > 0 && (
+                  <section className="rounded-[2rem] border border-red-200 bg-red-50 p-6">
+                    <p className="text-sm font-semibold uppercase tracking-wide text-red-700">Must resolve</p>
+                    <h3 className="mt-1 text-xl font-bold text-red-950">Critical issues before publishing</h3>
+                    <ul className="mt-4 space-y-3">
+                      {analysis.critical_issues.map((item, index) => (
+                        <li key={`${item.title}-${index}`} className="rounded-2xl border border-red-200 bg-white p-4">
+                          <p className="font-semibold text-red-950">{item.title}</p>
+                          {item.evidence && <p className="mt-2 text-sm text-red-800"><span className="font-semibold">Evidence:</span> {item.evidence}</p>}
+                          {item.description && <p className="mt-2 text-sm leading-6 text-red-800">{item.description}</p>}
+                          {item.recommendation && <p className="mt-2 text-sm text-red-900"><span className="font-semibold">Next:</span> {item.recommendation}</p>}
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
+
+                {(analysis.claim_checks || []).length > 0 && (
+                  <section className="surface-panel rounded-[2rem] p-6 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
+                    <p className="text-sm font-semibold uppercase tracking-wide text-amber-700">Evidence review</p>
+                    <h3 className="mt-1 text-xl font-bold text-slate-950">Claims to verify</h3>
+                    <p className="mt-1 text-sm text-slate-500">This checks only evidence supplied with the content; it is not an external fact-check.</p>
+                    <ul className="mt-4 space-y-3">
+                      {analysis.claim_checks.map((item, index) => (
+                        <li key={`${item.claim}-${index}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="font-semibold text-slate-800">{item.claim}</p>
+                            <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase text-amber-700 ring-1 ring-amber-200">
+                              {item.evidence_status || 'not provided'} · {item.risk || 'review'} risk
+                            </span>
+                          </div>
+                          {item.explanation && <p className="mt-2 text-sm leading-6 text-slate-600">{item.explanation}</p>}
+                          {item.next_step && <p className="mt-2 text-sm text-slate-700"><span className="font-semibold">Verify:</span> {item.next_step}</p>}
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
+
                 <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
                   <div className="surface-panel rounded-[2rem] p-6 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
                     <div className="mb-4 flex items-center gap-3">
@@ -616,6 +705,7 @@ export default function ContentAnalysisPage() {
                               </span>
                             </div>
                             <p className="mt-2 text-sm text-slate-600">{item.description}</p>
+                            {item.evidence && <p className="mt-2 text-sm text-slate-600"><span className="font-semibold">Evidence:</span> {item.evidence}</p>}
                           </div>
                         ))
                       ) : (
@@ -641,11 +731,19 @@ export default function ContentAnalysisPage() {
                       {(analysis.recommendations || []).length ? (
                         analysis.recommendations.map((item, index) => (
                           <div key={`${item.title}-${index}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                            <p className="font-semibold text-slate-800">{item.title}</p>
-                            <p className="mt-2 text-sm text-slate-600">{item.explanation}</p>
-                            <div className="mt-3 rounded-xl bg-white p-3 text-sm text-slate-700 ring-1 ring-slate-200">
-                              <span className="font-semibold">Suggested copy:</span> {item.suggested_copy}
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <p className="font-semibold text-slate-800">{item.title}</p>
+                              {item.priority && <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold uppercase text-emerald-800">{item.priority} priority</span>}
                             </div>
+                            {item.evidence && <p className="mt-2 text-sm text-slate-600"><span className="font-semibold">Based on:</span> {item.evidence}</p>}
+                            {item.explanation && <p className="mt-2 text-sm leading-6 text-slate-600">{item.explanation}</p>}
+                            {item.next_step && <p className="mt-2 text-sm text-slate-700"><span className="font-semibold">Do next:</span> {item.next_step}</p>}
+                            {item.measurement && <p className="mt-1 text-sm text-slate-700"><span className="font-semibold">Verify:</span> {item.measurement}</p>}
+                            {item.suggested_copy && (
+                              <div className="mt-3 rounded-xl bg-white p-3 text-sm leading-6 text-slate-700 ring-1 ring-slate-200">
+                                <span className="font-semibold">Suggested copy:</span> {item.suggested_copy}
+                              </div>
+                            )}
                           </div>
                         ))
                       ) : (
@@ -658,12 +756,8 @@ export default function ContentAnalysisPage() {
                 </div>
 
                 <div className="surface-panel rounded-[2rem] p-6 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
-                  <p className="text-sm text-slate-500">AI summary</p>
-                  <h3 className="mt-2 text-2xl font-bold tracking-tight text-slate-950">Review outcome</h3>
-                  <p className="mt-4 text-base leading-7 text-slate-600">{analysis.summary}</p>
-
                   <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="mb-2 font-semibold text-slate-800">Improved content suggestion</p>
+                    <p className="mb-2 font-semibold text-slate-800">Suggested content rewrite</p>
                     <p className="text-sm leading-7 text-slate-600">{analysis.improved_content || 'No revised copy was produced.'}</p>
                   </div>
 
