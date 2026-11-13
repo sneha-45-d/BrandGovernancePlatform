@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import logging
 import re
@@ -126,8 +127,9 @@ class ImportPostInput(BaseModel):
     user_id: str | None = None
     platform: Literal['instagram', 'facebook', 'youtube', 'x', 'linkedin', 'manual'] = 'instagram'
     caption: str = Field(default='', max_length=10_000)
-    media_url: str = Field(default='', max_length=2048)
-    media_type: str = Field(default='post', max_length=50)
+    media_url: str = Field(default='', max_length=25_000_000)
+    media_type: str = Field(default='text', max_length=50)
+    video_script: str = Field(default='', max_length=20_000)
     permalink: str = Field(default='', max_length=2048)
     views: int = Field(default=0, ge=0)
     likes: int = Field(default=0, ge=0)
@@ -766,12 +768,34 @@ async def import_social_post(
     eng_rate = platform_fetcher.calculate_engagement_rate(metrics)
     metrics['engagement_rate'] = eng_rate
 
+    media_type = (payload.media_type or 'text').lower()
+    media_bytes = None
+    mime_type = None
+
+    if media_url.startswith('data:'):
+        try:
+            header, b64data = media_url.split(';base64,', 1)
+            mime_type = header.replace('data:', '')
+            media_bytes = base64.b64decode(b64data)
+        except Exception as b64_err:
+            logger.warning('Failed to decode base64 data URL: %s', b64_err)
+    elif media_url.startswith(('http://', 'https://')) and media_type in ('image', 'picture', 'carousel'):
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                img_resp = await client.get(media_url)
+                if img_resp.status_code == 200:
+                    media_bytes = img_resp.content
+                    mime_type = img_resp.headers.get('content-type', 'image/jpeg')
+        except Exception as dl_err:
+            logger.info('Could not download image from %s: %s', media_url, dl_err)
+
     post_dict = {
         'platform': platform,
         'external_id': f"import_{int(datetime.now(timezone.utc).timestamp())}_{secrets.token_hex(4)}",
         'caption': caption or f"Post imported from {platform.title()}",
         'media_url': media_url,
-        'media_type': payload.media_type or 'post',
+        'media_type': media_type,
         'permalink': payload.permalink,
         'published_at': datetime.now(timezone.utc).isoformat(),
         'metrics': metrics,
@@ -781,7 +805,13 @@ async def import_social_post(
 
     if payload.auto_audit:
         try:
-            audit_res = await post_auditor.audit_and_save_post(scoped_user_id, saved['id'])
+            audit_res = await post_auditor.audit_and_save_post(
+                scoped_user_id,
+                saved['id'],
+                media_bytes=media_bytes,
+                mime_type=mime_type,
+                video_script=payload.video_script,
+            )
             saved['audit_result'] = audit_res.get('audit_result')
             saved['audit_status'] = 'audited'
         except Exception as exc:
@@ -840,7 +870,34 @@ async def audit_single_post(
     if not post:
         raise HTTPException(status_code=404, detail='Post not found.')
     try:
-        result = await post_auditor.audit_and_save_post(scoped_user_id, post_id)
+        media_url = post.get('media_url', '')
+        media_type = post.get('media_type', 'text').lower()
+        media_bytes = None
+        mime_type = None
+        if media_url.startswith('data:'):
+            try:
+                header, b64data = media_url.split(';base64,', 1)
+                mime_type = header.replace('data:', '')
+                media_bytes = base64.b64decode(b64data)
+            except Exception:
+                pass
+        elif media_url.startswith(('http://', 'https://')) and media_type in ('image', 'picture', 'carousel'):
+            try:
+                import httpx
+                async with httpx.AsyncClient(timeout=3.0) as client:
+                    img_resp = await client.get(media_url)
+                    if img_resp.status_code == 200:
+                        media_bytes = img_resp.content
+                        mime_type = img_resp.headers.get('content-type', 'image/jpeg')
+            except Exception:
+                pass
+
+        result = await post_auditor.audit_and_save_post(
+            scoped_user_id,
+            post_id,
+            media_bytes=media_bytes,
+            mime_type=mime_type,
+        )
         return {
             'message': 'Post audit completed successfully.',
             'post_id': post_id,

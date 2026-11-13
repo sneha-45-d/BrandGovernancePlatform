@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import axios from 'axios'
 import {
   AlertCircle,
@@ -9,9 +9,13 @@ import {
   Copy,
   ExternalLink,
   Eye,
+  FileText,
   Heart,
+  Image as ImageIcon,
+  Layers,
   LoaderCircle,
   MessageCircle,
+  Play,
   Plus,
   RefreshCw,
   Share2,
@@ -20,6 +24,9 @@ import {
   Sparkles,
   Trash2,
   TrendingUp,
+  Upload,
+  Video,
+  X,
 } from 'lucide-react'
 import { getApiErrorMessage } from '../lib/apiError'
 import { getCurrentUserId } from '../lib/brandData'
@@ -35,8 +42,10 @@ export default function PostAuditPanel({
   const [showAddModal, setShowAddModal] = useState(false)
   const [newPost, setNewPost] = useState({
     platform: 'instagram',
+    media_type: 'image',
     caption: '',
     media_url: '',
+    video_script: '',
     permalink: '',
     views: '',
     likes: '',
@@ -44,6 +53,8 @@ export default function PostAuditPanel({
     shares: '',
     auto_audit: true,
   })
+  const [filePreview, setFilePreview] = useState(null)
+  const fileInputRef = useRef(null)
   const [submitting, setSubmitting] = useState(false)
   const [auditingId, setAuditingId] = useState(null)
   const [syncingPlatform, setSyncingPlatform] = useState(null)
@@ -58,6 +69,42 @@ export default function PostAuditPanel({
     setTimeout(() => setCopiedId(null), 2500)
   }
 
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 25 * 1024 * 1024) {
+      setError('File size exceeds 25MB limit.')
+      return
+    }
+    const isVideo = file.type.startsWith('video/')
+    const isImage = file.type.startsWith('image/')
+    if (!isVideo && !isImage) {
+      setError('Please upload an image (PNG, JPG, WEBP) or video (MP4, WEBM).')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const dataUrl = event.target.result
+      setFilePreview({
+        url: dataUrl,
+        type: isVideo ? 'video' : 'image',
+        name: file.name,
+      })
+      setNewPost((prev) => ({
+        ...prev,
+        media_url: dataUrl,
+        media_type: isVideo ? 'video' : 'image',
+      }))
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleClearFile = () => {
+    setFilePreview(null)
+    setNewPost((prev) => ({ ...prev, media_url: '' }))
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
   const handleImportPost = async (e) => {
     e.preventDefault()
     setSubmitting(true)
@@ -65,8 +112,10 @@ export default function PostAuditPanel({
     try {
       await axios.post('/api/social/posts/import', {
         platform: newPost.platform,
+        media_type: newPost.media_type,
         caption: newPost.caption,
         media_url: newPost.media_url,
+        video_script: newPost.video_script,
         permalink: newPost.permalink,
         views: parseInt(newPost.views || '0', 10) || 0,
         likes: parseInt(newPost.likes || '0', 10) || 0,
@@ -75,12 +124,14 @@ export default function PostAuditPanel({
         auto_audit: newPost.auto_audit,
         user_id: getCurrentUserId(),
       })
-      setSuccess('Post imported and analyzed successfully!')
+      setSuccess(`Post (${newPost.media_type.toUpperCase()}) imported and audited successfully!`)
       setShowAddModal(false)
       setNewPost({
         platform: 'instagram',
+        media_type: 'image',
         caption: '',
         media_url: '',
+        video_script: '',
         permalink: '',
         views: '',
         likes: '',
@@ -88,6 +139,7 @@ export default function PostAuditPanel({
         shares: '',
         auto_audit: true,
       })
+      setFilePreview(null)
       onRefresh()
     } catch (err) {
       setError(getApiErrorMessage(err, 'Failed to import post.'))
@@ -178,6 +230,36 @@ export default function PostAuditPanel({
       default:
         return <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700"><CheckCircle2 className="h-3.5 w-3.5" /> Safe</span>
     }
+  }
+
+  const getMediaTypeBadge = (mediaType) => {
+    const t = (mediaType || 'text').toLowerCase()
+    if (t === 'video' || t === 'reel' || t === 'short') {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-md bg-purple-100 px-2 py-0.5 text-[10px] font-bold text-purple-800 tracking-wider">
+          <Video className="h-3 w-3" /> VIDEO / REEL
+        </span>
+      )
+    }
+    if (t === 'image' || t === 'picture' || t === 'photo') {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-md bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-800 tracking-wider">
+          <ImageIcon className="h-3 w-3" /> PICTURE / IMAGE
+        </span>
+      )
+    }
+    if (t === 'carousel') {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-md bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-800 tracking-wider">
+          <Layers className="h-3 w-3" /> CAROUSEL
+        </span>
+      )
+    }
+    return (
+      <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-800 tracking-wider">
+        <FileText className="h-3 w-3" /> TEXT POST
+      </span>
+    )
   }
 
   const getActionBadge = (action) => {
@@ -305,9 +387,9 @@ export default function PostAuditPanel({
         <div className="surface-panel rounded-2xl p-6 shadow-md border border-emerald-100 bg-emerald-50/30">
           <div className="flex items-start justify-between">
             <div>
-              <h3 className="font-bold text-slate-900 text-base">Import Social Post with Real Metrics</h3>
+              <h3 className="font-bold text-slate-900 text-base">Audit Post Across All Formats (Videos, Pictures, Text)</h3>
               <p className="mt-1 text-xs text-slate-500">
-                Paste any live post link (Instagram, YouTube, X, Facebook, LinkedIn) or enter caption and views/likes/comments to evaluate true engagement and audit claims.
+                Analyze video transcripts, image visuals & on-screen OCR text, or text captions across any connected social channel with live engagement metrics.
               </p>
             </div>
             <button
@@ -320,6 +402,133 @@ export default function PostAuditPanel({
           </div>
 
           <form onSubmit={handleImportPost} className="mt-4 space-y-4">
+            {/* Media Format Selector */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700">Select Post Media Format</label>
+              <div className="mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <button
+                  type="button"
+                  onClick={() => setNewPost({ ...newPost, media_type: 'text' })}
+                  className={`flex items-center justify-center gap-2 rounded-xl p-2.5 text-xs font-bold transition border ${
+                    newPost.media_type === 'text'
+                      ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <FileText className="h-4 w-4" /> Text Post
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewPost({ ...newPost, media_type: 'image' })}
+                  className={`flex items-center justify-center gap-2 rounded-xl p-2.5 text-xs font-bold transition border ${
+                    newPost.media_type === 'image'
+                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <ImageIcon className="h-4 w-4" /> Picture / Image
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewPost({ ...newPost, media_type: 'video' })}
+                  className={`flex items-center justify-center gap-2 rounded-xl p-2.5 text-xs font-bold transition border ${
+                    newPost.media_type === 'video'
+                      ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <Video className="h-4 w-4" /> Video / Reel / Short
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewPost({ ...newPost, media_type: 'carousel' })}
+                  className={`flex items-center justify-center gap-2 rounded-xl p-2.5 text-xs font-bold transition border ${
+                    newPost.media_type === 'carousel'
+                      ? 'bg-sky-600 text-white border-sky-600 shadow-sm'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <Layers className="h-4 w-4" /> Carousel
+                </button>
+              </div>
+            </div>
+
+            {/* Media Upload or Direct URL if non-text */}
+            {newPost.media_type !== 'text' && (
+              <div className="space-y-3 rounded-xl border border-slate-200 bg-white/80 p-3.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-700">
+                    {newPost.media_type === 'video' ? 'Upload Video Clip or Provide URL' : 'Upload Image / Visual or Provide URL'}
+                  </label>
+                  <span className="text-[10px] text-slate-400">Supported: JPG, PNG, WEBP, MP4 (up to 25MB)</span>
+                </div>
+
+                {filePreview ? (
+                  <div className="relative flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-2.5">
+                    {filePreview.type === 'video' ? (
+                      <video src={filePreview.url} className="h-16 w-24 rounded-lg object-cover" controls={false} />
+                    ) : (
+                      <img src={filePreview.url} alt="Upload preview" className="h-16 w-16 rounded-lg object-cover" />
+                    )}
+                    <div className="min-w-0 flex-1 text-xs">
+                      <p className="font-semibold text-slate-800 truncate">{filePreview.name}</p>
+                      <p className="text-[11px] text-emerald-600 font-medium">Ready for AI multimodal visual & OCR claim audit</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleClearFile}
+                      className="rounded-lg p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-700"
+                      title="Remove media file"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 p-3.5 text-center hover:border-emerald-500 hover:bg-emerald-50/20 transition">
+                      <Upload className="h-5 w-5 text-slate-400" />
+                      <span className="mt-1 text-xs font-medium text-slate-600">
+                        Upload {newPost.media_type === 'video' ? 'Video File' : 'Image File'}
+                      </span>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept={newPost.media_type === 'video' ? 'video/mp4,video/webm' : 'image/png,image/jpeg,image/webp'}
+                        onChange={handleFileChange}
+                        className="hidden"
+                      />
+                    </label>
+
+                    <div className="flex flex-col justify-center">
+                      <span className="text-[11px] text-slate-500 mb-1 font-medium">Or Direct Media Image / Video URL:</span>
+                      <input
+                        type="url"
+                        placeholder="https://cdn.example.com/media.jpg or .mp4"
+                        value={newPost.media_url}
+                        onChange={(e) => setNewPost({ ...newPost, media_url: e.target.value })}
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {newPost.media_type === 'video' && (
+                  <div className="pt-1">
+                    <label className="block text-xs font-semibold text-slate-700">
+                      Spoken Video Dialogue / Script (Optional)
+                    </label>
+                    <textarea
+                      rows={2}
+                      placeholder="Enter spoken script or voiceover dialogue to audit spoken claims, hook ethics, and brand safety..."
+                      value={newPost.video_script}
+                      onChange={(e) => setNewPost({ ...newPost, video_script: e.target.value })}
+                      className="mt-1 w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-800"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label className="block text-xs font-semibold text-slate-700">Platform</label>
@@ -437,7 +646,7 @@ export default function PostAuditPanel({
                   onChange={(e) => setNewPost({ ...newPost, auto_audit: e.target.checked })}
                   className="rounded border-slate-300 text-emerald-600"
                 />
-                Run instant AI Brand Safety & Deceptive Marketing audit
+                Run instant AI multimodal audit (Visual, OCR, Video Script, Claims)
               </label>
 
               <div className="flex gap-2">
@@ -474,7 +683,7 @@ export default function PostAuditPanel({
             <ShieldAlert className="mx-auto h-10 w-10 text-slate-300" />
             <h4 className="mt-3 text-sm font-semibold text-slate-700">No Brand Posts Ingested Yet</h4>
             <p className="mt-1 text-xs text-slate-500 max-w-sm mx-auto">
-              Sync posts from your connected accounts or paste a live post link to analyze views, likes, comments, and claim safety.
+              Import and audit your videos, images, or text posts to evaluate visual compliance, on-screen text, false claims, and live metrics.
             </p>
             <button
               type="button"
@@ -488,6 +697,7 @@ export default function PostAuditPanel({
           posts.map((post) => {
             const audit = post.audit_result || {}
             const violations = audit.violations || []
+            const mediaAudit = audit.media_audit || {}
             const isAudited = post.audit_status === 'audited'
             const metrics = post.metrics || {}
             const pViews = metrics.views || 0
@@ -496,6 +706,11 @@ export default function PostAuditPanel({
             const pShares = metrics.shares || 0
             const pEngRate = metrics.engagement_rate != null ? metrics.engagement_rate : 0.0
 
+            const isVideoPost =
+              (post.media_type || '').toLowerCase() === 'video' ||
+              (post.media_url || '').startsWith('data:video/') ||
+              /\.(mp4|webm)($|\?)/i.test(post.media_url || '')
+
             return (
               <div
                 key={post.id}
@@ -503,10 +718,11 @@ export default function PostAuditPanel({
               >
                 {/* Post Header */}
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex flex-wrap items-center gap-2.5">
                     <span className="rounded-lg bg-slate-900 px-2 py-0.5 text-[10px] font-bold uppercase text-white tracking-wider">
                       {post.platform}
                     </span>
+                    {getMediaTypeBadge(post.media_type)}
                     <span className="text-xs text-slate-400">
                       {new Date(post.published_at).toLocaleString()}
                     </span>
@@ -597,7 +813,29 @@ export default function PostAuditPanel({
                   </div>
                 </div>
 
-                {/* Post Content */}
+                {/* Media Creative Preview (if image or video) */}
+                {post.media_url && (
+                  <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-900/5 max-w-lg">
+                    {isVideoPost ? (
+                      <video
+                        src={post.media_url}
+                        controls
+                        className="max-h-72 w-full rounded-xl object-contain bg-black"
+                      />
+                    ) : (
+                      <img
+                        src={post.media_url}
+                        alt="Post media visual"
+                        className="max-h-72 w-full rounded-xl object-cover"
+                        onError={(e) => {
+                          e.target.style.display = 'none'
+                        }}
+                      />
+                    )}
+                  </div>
+                )}
+
+                {/* Post Caption / Content */}
                 <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-800 leading-relaxed font-sans whitespace-pre-wrap">
                   {post.caption}
                 </div>
@@ -614,6 +852,61 @@ export default function PostAuditPanel({
                         </p>
                         {audit.removal_reason && (
                           <p className="leading-relaxed pl-5 text-rose-800">{audit.removal_reason}</p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Media & Visual Compliance Audit Card */}
+                    {mediaAudit && mediaAudit.media_type && mediaAudit.media_type !== 'text' && (
+                      <div className="rounded-xl border border-purple-200 bg-purple-50/40 p-3.5 text-xs space-y-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold uppercase tracking-wider text-purple-900 flex items-center gap-1.5 text-[11px]">
+                              {mediaAudit.media_type === 'video' ? <Video className="h-3.5 w-3.5 text-purple-600" /> : <ImageIcon className="h-3.5 w-3.5 text-sky-600" />}
+                              Media Visual & Creative Compliance
+                            </span>
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                                mediaAudit.visual_compliance === 'compliant'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : mediaAudit.visual_compliance === 'warning'
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : 'bg-rose-100 text-rose-800'
+                              }`}
+                            >
+                              {mediaAudit.visual_compliance?.toUpperCase()}
+                            </span>
+                          </div>
+                          {mediaAudit.brand_visual_score != null && (
+                            <span className="font-semibold text-purple-950">
+                              Visual Brand Score: <strong>{mediaAudit.brand_visual_score}</strong>/100
+                            </span>
+                          )}
+                        </div>
+
+                        {mediaAudit.visual_findings && mediaAudit.visual_findings.length > 0 && (
+                          <div className="space-y-1 pt-1">
+                            <span className="font-semibold text-slate-700">Visual & Graphic Analysis:</span>
+                            <ul className="list-disc pl-4 text-slate-600 space-y-0.5">
+                              {mediaAudit.visual_findings.map((f, i) => (
+                                <li key={i}>{f}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {mediaAudit.ocr_text_detected && (
+                          <div className="rounded-lg bg-white/80 p-2 border border-purple-100 text-slate-700">
+                            <span className="font-bold text-slate-800">Detected On-Screen / OCR Text: </span>
+                            <span className="font-mono text-[11px] text-slate-600">&ldquo;{mediaAudit.ocr_text_detected}&rdquo;</span>
+                          </div>
+                        )}
+
+                        {mediaAudit.video_transcript_analysis && (
+                          <div className="rounded-lg bg-white/80 p-2 border border-purple-100 text-slate-700">
+                            <span className="font-bold text-purple-900">Video Narrative & Hook Analysis: </span>
+                            <span className="text-slate-700">{mediaAudit.video_transcript_analysis}</span>
+                          </div>
                         )}
                       </div>
                     )}

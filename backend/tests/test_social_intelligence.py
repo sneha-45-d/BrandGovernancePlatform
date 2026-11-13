@@ -245,5 +245,44 @@ class SocialIntelligenceTests(unittest.TestCase):
         self.assertNotIn('refresh_token_encrypted', account)
 
 
+    def test_multi_format_post_auditing_images_videos_text(self):
+        from app.services.post_auditor import heuristic_audit
+
+        # 1. Text post audit
+        text_audit = heuristic_audit(
+            caption="Excited to launch our new product line!",
+            brand_name="Northstar",
+            platform="x",
+            media_type="text",
+        )
+        self.assertEqual(text_audit['risk_level'], 'safe')
+        self.assertEqual(text_audit['media_audit']['media_type'], 'text')
+        self.assertEqual(text_audit['media_audit']['visual_compliance'], 'not_applicable')
+
+        # 2. Image post audit with false clinical seal
+        image_audit = heuristic_audit(
+            caption="Check out our formula with Doctor Approved and 100% Genuine Seal!",
+            brand_name="Northstar",
+            platform="instagram",
+            media_type="image",
+            media_url="https://example.com/ad.jpg",
+        )
+        self.assertIn(image_audit['media_audit']['visual_compliance'], ('warning', 'non_compliant'))
+        self.assertEqual(image_audit['media_audit']['media_type'], 'image')
+        self.assertTrue(len(image_audit['media_audit']['visual_findings']) > 0)
+
+        # 3. Video / Reel audit with script and sensational hook
+        video_audit = heuristic_audit(
+            caption="New reel on life hacks!",
+            brand_name="Northstar",
+            platform="instagram",
+            media_type="video",
+            video_script="Here is a secret trick they don't want you to know about overnight wealth!",
+        )
+        self.assertEqual(video_audit['media_audit']['media_type'], 'video')
+        self.assertIn(video_audit['media_audit']['visual_compliance'], ('warning', 'non_compliant'))
+        self.assertTrue(len(video_audit['media_audit']['video_transcript_analysis']) > 0)
+
+
 if __name__ == '__main__':
     unittest.main()
