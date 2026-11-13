@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 
 from app.config import settings
+from app.database.local_store import ensure_db_ready
 from app.routes import auth, brand, competitors, content, health, leaderboard, social, visual
 
 app = FastAPI(
@@ -9,6 +11,9 @@ app = FastAPI(
     version=settings.APP_VERSION,
     description='AI-powered brand governance and intelligence platform API.',
 )
+
+# Enable GZip compression for all responses > 1KB (reduces payload by 70-85%)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 app.add_middleware(
     CORSMiddleware,
@@ -18,6 +23,12 @@ app.add_middleware(
     allow_methods=['*'],
     allow_headers=['*'],
 )
+
+
+@app.on_event('startup')
+def on_startup():
+    # Warm up SQLite database and WAL mode once at startup rather than per request
+    ensure_db_ready()
 
 app.include_router(health.router)
 app.include_router(health.router, prefix='/api')

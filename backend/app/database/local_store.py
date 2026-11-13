@@ -203,14 +203,34 @@ def _init_db(connection):
         pass
 
 
-@contextmanager
-def _connect():
+_db_initialized = False
+
+
+def ensure_db_ready():
+    global _db_initialized
+    if _db_initialized:
+        return
     database_path = Path(settings.LOCAL_DB_PATH)
     database_path.parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(database_path, timeout=5)
+    with sqlite3.connect(database_path, timeout=10) as conn:
+        conn.execute('PRAGMA journal_mode = WAL')
+        conn.execute('PRAGMA synchronous = NORMAL')
+        conn.execute('PRAGMA cache_size = -64000')
+        conn.execute('PRAGMA temp_store = MEMORY')
+        conn.execute('PRAGMA foreign_keys = ON')
+        _init_db(conn)
+    _db_initialized = True
+
+
+@contextmanager
+def _connect():
+    if not _db_initialized:
+        ensure_db_ready()
+    database_path = Path(settings.LOCAL_DB_PATH)
+    connection = sqlite3.connect(database_path, timeout=10)
     connection.row_factory = sqlite3.Row
     connection.execute('PRAGMA foreign_keys = ON')
-    _init_db(connection)
+    connection.execute('PRAGMA synchronous = NORMAL')
     try:
         yield connection
         connection.commit()

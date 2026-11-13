@@ -9,7 +9,7 @@ from uuid import uuid4
 from pymongo.errors import DuplicateKeyError, PyMongoError
 
 from app.database import local_store
-from app.database.mongo import get_db
+from app.database.mongo import get_db, is_mongo_available
 
 logger = logging.getLogger(__name__)
 _mongo_indexes_ready = False
@@ -68,16 +68,12 @@ def _ensure_indexes():
 
 
 def _try_mongo(operation, fallback):
-    global _mongo_retry_after
-    try:
-        if time.monotonic() >= _mongo_retry_after:
+    if is_mongo_available():
+        try:
             _ensure_indexes()
-            result = operation()
-            _mongo_retry_after = 0
-            return result
-    except PyMongoError:
-        _mongo_retry_after = time.monotonic() + 5
-        logger.info('MongoDB unavailable for social intelligence; using server-local storage', exc_info=True)
+            return operation()
+        except PyMongoError:
+            pass
     try:
         return fallback()
     except sqlite3.Error as exc:

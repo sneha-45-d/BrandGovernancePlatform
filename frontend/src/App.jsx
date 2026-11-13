@@ -1,22 +1,31 @@
-import { useEffect, useState } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import { MoonStar, SunMedium } from 'lucide-react'
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom'
-import DashboardPage from './pages/DashboardPage'
-import AnalyticsPage from './pages/AnalyticsPage'
-import PricingPage from './pages/PricingPage'
-import AuthPage from './pages/AuthPage'
-import ContentAnalysisPage from './pages/ContentAnalysisPage'
-import AICorrectionPage from './pages/AICorrectionPage'
-import BrandIntelligencePage from './pages/BrandIntelligencePage'
-import BrandGuidelinesPage from './pages/BrandGuidelinesPage'
-import ReviewQueuePage from './pages/ReviewQueuePage'
-import AccountSettingsPage from './pages/AccountSettingsPage'
-import CompetitorManagePage from './pages/CompetitorManagePage'
-import LeaderboardPage from './pages/LeaderboardPage'
-import VisualCheckPage from './pages/VisualCheckPage'
-import LandingPage from './pages/LandingPage'
-import SocialIntelligencePage from './pages/SocialIntelligencePage'
 import { AuthProvider, useAuth } from './lib/AuthContext'
+
+const DashboardPage = lazy(() => import('./pages/DashboardPage'))
+const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'))
+const PricingPage = lazy(() => import('./pages/PricingPage'))
+const AuthPage = lazy(() => import('./pages/AuthPage'))
+const ContentAnalysisPage = lazy(() => import('./pages/ContentAnalysisPage'))
+const AICorrectionPage = lazy(() => import('./pages/AICorrectionPage'))
+const BrandIntelligencePage = lazy(() => import('./pages/BrandIntelligencePage'))
+const BrandGuidelinesPage = lazy(() => import('./pages/BrandGuidelinesPage'))
+const ReviewQueuePage = lazy(() => import('./pages/ReviewQueuePage'))
+const AccountSettingsPage = lazy(() => import('./pages/AccountSettingsPage'))
+const CompetitorManagePage = lazy(() => import('./pages/CompetitorManagePage'))
+const LeaderboardPage = lazy(() => import('./pages/LeaderboardPage'))
+const VisualCheckPage = lazy(() => import('./pages/VisualCheckPage'))
+const LandingPage = lazy(() => import('./pages/LandingPage'))
+const SocialIntelligencePage = lazy(() => import('./pages/SocialIntelligencePage'))
+
+function PageLoader() {
+  return (
+    <div className="flex min-h-[50vh] items-center justify-center">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+    </div>
+  )
+}
 
 function RequireAuth() {
   const { user, isLoading } = useAuth()
@@ -48,34 +57,36 @@ function AppShell() {
         <span>{theme === 'light' ? 'Dark' : 'Light'} mode</span>
       </button>
 
-      <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/pricing" element={<PricingPage />} />
-        <Route path="/signin" element={<AuthPage mode="signin" />} />
-        <Route path="/signup" element={<AuthPage mode="signup" />} />
-        <Route element={<RequireAuth />}>
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/analytics" element={<AnalyticsPage />} />
-          <Route path="/content-analysis" element={<ContentAnalysisPage />} />
-          <Route path="/ai-correction" element={<AICorrectionPage />} />
-          <Route path="/brand-intelligence" element={<BrandIntelligencePage />} />
-          <Route path="/brand-guidelines" element={<BrandGuidelinesPage />} />
-          <Route path="/review-queue" element={<ReviewQueuePage />} />
-          <Route path="/competitors" element={<CompetitorManagePage />} />
-          <Route path="/leaderboard" element={<LeaderboardPage />} />
-          <Route path="/visual-check" element={<VisualCheckPage />} />
-          <Route path="/settings" element={<AccountSettingsPage />} />
-          <Route path="/social" element={<Navigate to="/social/overview" replace />} />
-          <Route path="/social/overview" element={<SocialIntelligencePage key="overview" section="overview" />} />
-          <Route path="/social/audit" element={<SocialIntelligencePage key="audit" section="audit" />} />
-          <Route path="/social/strategy" element={<SocialIntelligencePage key="strategy" section="strategy" />} />
-          <Route path="/social/mentions" element={<SocialIntelligencePage key="mentions" section="mentions" />} />
-          <Route path="/social/sentiment" element={<SocialIntelligencePage key="sentiment" section="sentiment" />} />
-          <Route path="/social/competitors" element={<SocialIntelligencePage key="competitors" section="competitors" />} />
-          <Route path="/social/alerts" element={<SocialIntelligencePage key="alerts" section="alerts" />} />
-        </Route>
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
-      </Routes>
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/pricing" element={<PricingPage />} />
+          <Route path="/signin" element={<AuthPage mode="signin" />} />
+          <Route path="/signup" element={<AuthPage mode="signup" />} />
+          <Route element={<RequireAuth />}>
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/analytics" element={<AnalyticsPage />} />
+            <Route path="/content-analysis" element={<ContentAnalysisPage />} />
+            <Route path="/ai-correction" element={<AICorrectionPage />} />
+            <Route path="/brand-intelligence" element={<BrandIntelligencePage />} />
+            <Route path="/brand-guidelines" element={<BrandGuidelinesPage />} />
+            <Route path="/review-queue" element={<ReviewQueuePage />} />
+            <Route path="/competitors" element={<CompetitorManagePage />} />
+            <Route path="/leaderboard" element={<LeaderboardPage />} />
+            <Route path="/visual-check" element={<VisualCheckPage />} />
+            <Route path="/settings" element={<AccountSettingsPage />} />
+            <Route path="/social" element={<Navigate to="/social/overview" replace />} />
+            <Route path="/social/overview" element={<SocialIntelligencePage key="overview" section="overview" />} />
+            <Route path="/social/audit" element={<SocialIntelligencePage key="audit" section="audit" />} />
+            <Route path="/social/strategy" element={<SocialIntelligencePage key="strategy" section="strategy" />} />
+            <Route path="/social/mentions" element={<SocialIntelligencePage key="mentions" section="mentions" />} />
+            <Route path="/social/sentiment" element={<SocialIntelligencePage key="sentiment" section="sentiment" />} />
+            <Route path="/social/competitors" element={<SocialIntelligencePage key="competitors" section="competitors" />} />
+            <Route path="/social/alerts" element={<SocialIntelligencePage key="alerts" section="alerts" />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      </Suspense>
     </>
   )
 }
