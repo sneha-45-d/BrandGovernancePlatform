@@ -368,14 +368,14 @@ Rules:
         content=content,
     )
 
-    configured_model = (settings.GEMINI_MODEL or 'gemini-2.0-flash').strip()
+    configured_model = (settings.GEMINI_MODEL or 'gemini-3.5-flash-lite').strip()
     models_to_try = list(dict.fromkeys([
         configured_model,
-        'gemini-2.0-flash',
-        'gemini-2.0-flash-lite',
-        'gemini-1.5-flash',
-        'gemini-1.5-pro',
-        'gemini-2.5-flash',
+        'gemini-3.5-flash-lite',
+        'gemini-3.8-flash',
+        'gemini-3.5-flash',
+        'gemini-3.8-pro',
+        'gemini-3.5-pro',
     ]))
 
     last_error = None
@@ -473,14 +473,14 @@ Rules:
         content=content,
     )
 
-    configured_model = (settings.GEMINI_MODEL or 'gemini-2.0-flash').strip()
+    configured_model = (settings.GEMINI_MODEL or 'gemini-3.5-flash-lite').strip()
     models_to_try = list(dict.fromkeys([
         configured_model,
-        'gemini-2.0-flash',
-        'gemini-2.0-flash-lite',
-        'gemini-1.5-flash',
-        'gemini-1.5-pro',
-        'gemini-2.5-flash',
+        'gemini-3.5-flash-lite',
+        'gemini-3.8-flash',
+        'gemini-3.5-flash',
+        'gemini-3.8-pro',
+        'gemini-3.5-pro',
     ]))
 
     last_error = None
