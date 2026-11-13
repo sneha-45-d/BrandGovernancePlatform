@@ -1,46 +1,56 @@
-# Brandithm
+# BRANDITHM
 
-Brandithm is a brand governance platform for reviewing written content against a brand's voice, terminology, and communication guidelines. It combines a React dashboard with a FastAPI service, Gemini-powered analysis when configured, and persistent storage for accounts, guidelines, review decisions, and analysis history.
+**AI-Powered Brand Governance & Intelligence Platform**
+
+Brandithm helps teams review content against their brand voice, terminology, and communication guidelines. It combines a React dashboard with a FastAPI backend, authenticated accounts, brand profiles, content reviews, and saved history.
 
 ## Contents
 
 - [Features](#features)
 - [Technology](#technology)
-- [Run locally](#run-locally)
+- [Quick start](#quick-start)
 - [Configuration](#configuration)
-- [Persistence and database fallback](#persistence-and-database-fallback)
-- [Deploy to Netlify](#deploy-to-netlify)
-- [Run with Docker](#run-with-docker)
-- [Application routes](#application-routes)
-- [API and checks](#api-and-checks)
 - [Project structure](#project-structure)
+- [API and tests](#api-and-tests)
+- [Deployment](#deployment)
 
 ## Features
 
-- Sign up, sign in, account settings, and sign out.
-- Dashboard and Brand Intelligence views for reviewing recent activity and brand health.
-- Editable Brand Guidelines shared with content analysis and AI correction.
-- Content analysis for text, PDF, DOCX, PPTX, images, audio, and video, with scores, detected issues, recommendations, and review history. Image/audio/video and presentation slide-image analysis require a configured Gemini API key.
-- Social Media Intelligence with per-account monitoring terms, provenance-labeled mention records, Gemini sentiment analysis, competitor profiles, evidence-based alerts, and provider connection status.
-- AI-assisted content correction.
-- Review Queue actions to approve a report or request revisions.
-- Light and dark themes.
-- Gemini-backed analysis and correction when a Google AI API key is configured; local rule-based checks are used when Gemini is unavailable.
+- Account registration, sign-in, and user-scoped data.
+- Dashboard, analytics, Brand Intelligence, and editable brand guidelines.
+- Content analysis and brand-aligned correction for text and supported documents/media.
+- Review queue to approve reports or request revisions.
+- Social Media Intelligence for monitored mentions, competitor profiles, and alerts.
+- Responsive layouts and light/dark themes.
+
+Some AI-powered features require an optional provider key. The application reports provider configuration or availability errors rather than presenting a failed request as a successful analysis.
 
 ## Technology
 
 - **Frontend:** React, Vite, React Router, Tailwind CSS
 - **Backend:** Python, FastAPI, Uvicorn
-- **Data:** MongoDB (PyMongo), with a server-local SQLite fallback
-- **AI:** Google Gemini API (optional)
+- **Data:** MongoDB via PyMongo, with server-local SQLite fallback
+- **AI:** Optional Google Gemini integration
 
-## Run locally
+## Quick start
 
-You will need Node.js/npm and Python installed. Run the frontend and backend in separate terminals.
+### Prerequisites
 
-### 1. Configure the backend
+- Git
+- Node.js 22.12 or newer and npm
+- Python 3.12
+- MongoDB (optional for local development; SQLite fallback is available)
 
-From the repository root, create a virtual environment and install the backend packages:
+### 1. Clone the repository
+
+```powershell
+git clone https://github.com/sneha-45-d/BrandGovernancePlatform.git
+cd BrandGovernancePlatform
+```
+
+### 2. Configure and start the backend
+
+From the repository root, create a Python virtual environment and install dependencies:
 
 ```powershell
 cd backend
@@ -50,25 +60,24 @@ pip install -r requirements.txt
 Copy-Item .env.example .env
 ```
 
-Open `C:\Users\vishu\BrandGovernancePlatform\backend\.env` and replace the placeholder on the `GEMINI_API_KEY` line with your own key, for example `GEMINI_API_KEY=your_actual_key`. Do not send the key in chat or commit this ignored file. The backend reads the key; it is never sent to the frontend. Without it, Gemini sentiment and reply-draft requests show a configuration error instead of returning fabricated AI output.
+Edit `backend\.env`:
 
-Social OAuth credentials may be added to `backend\.env` using the provider placeholders. Generate an encryption key in the backend environment with `.\.venv\Scripts\python.exe -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` and set it as `SOCIAL_OAUTH_ENCRYPTION_KEY`. Register each callback URL from `backend\.env.example` in the matching provider developer console. Account linking uses OAuth and encrypts stored access/refresh tokens. Linking an account alone does not grant access to public posts or enable monitoring; posts still require separate provider API permissions and ingestion support. Reply suggestions are drafts only and are never published.
-
-### Social Intelligence verification
-
-From `backend`, run `.\.venv\Scripts\python.exe -m unittest discover -s tests -v`. Authenticated social endpoints use `/api/social/overview`, `/api/social/config`, `/api/social/mentions`, `/api/social/competitors`, `/api/social/alerts`, and `/api/social/integrations`. All persisted records are user-scoped. The overview computes counts from stored mentions only; no demo social posts or analytics are seeded.
-
-Edit `backend/.env` and set at least a secure `JWT_SECRET_KEY`. Configure `MONGO_URI` if you want to use MongoDB, and `GEMINI_API_KEY` if you want Gemini-powered analysis and correction. See [Configuration](#configuration) for details.
+- Set a long, unique `JWT_SECRET_KEY`.
+- Set `PORT=8003` to match the local frontend proxy.
+- Set `MONGO_URI` if using MongoDB. Otherwise the backend uses its SQLite fallback.
+- Set `GEMINI_API_KEY` only if you want to use Gemini-powered features.
 
 Start the API from the `backend` directory:
 
 ```powershell
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8003
 ```
 
-### 2. Start the frontend
+The API health check is at [http://localhost:8003/api/health](http://localhost:8003/api/health). Interactive API documentation is at [http://localhost:8003/docs](http://localhost:8003/docs).
 
-In a second terminal:
+### 3. Install and start the frontend
+
+Open a second terminal at the repository root:
 
 ```powershell
 cd frontend
@@ -76,22 +85,23 @@ npm ci
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173) for the public landing page. Sign in at `/signin` or create an account at `/signup`. Vite forwards `/api` requests to `http://localhost:8000`.
+Open [http://localhost:5173](http://localhost:5173), then sign in or create an account. Vite forwards `/api` requests to the backend on port 8003.
 
-### macOS/Linux shell
+### macOS/Linux
 
-Use the equivalent commands below if you are not using PowerShell:
+Backend setup:
 
 ```bash
 cd backend
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+# Set PORT=8003 and a secure JWT_SECRET_KEY in .env
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8003
 ```
 
-In another terminal:
+Frontend setup, in a second terminal:
 
 ```bash
 cd frontend
@@ -101,112 +111,74 @@ npm run dev
 
 ## Configuration
 
-Backend settings are read from `backend/.env`. The checked-in `backend/.env.example` is a template; never commit real credentials.
+Backend secrets belong only in `backend/.env`. Do not put credentials in frontend variables, commit them, or paste them into source files.
 
 | Variable | Purpose |
 | --- | --- |
-| `PORT` | Backend port; defaults to `8000`. |
-| `MONGO_URI` | MongoDB connection URI. Defaults to local MongoDB at `mongodb://localhost:27017`. |
-| `DB_NAME` | MongoDB database name; defaults to `brandithm`. |
-| `LOCAL_DB_PATH` | Optional SQLite fallback path. Defaults to `backend/data/brandithm.sqlite3` for a local run. |
-| `JWT_SECRET_KEY` | Secret used for session/authentication security. Set a long, unique value outside development. |
-| `GOOGLE_API_KEY` | Optional Google AI API key for Gemini. `GEMINI_API_KEY` is also accepted. |
-| `GEMINI_MODEL` | Gemini model name; defaults to `gemini-3.6-flash`. |
-| `CHROMA_DB_PATH` | Chroma data directory; defaults to `backend/app/data/chroma`. |
+| `PORT` | Backend port. Use `8003` for the local Vite proxy; deployment platforms may set this automatically. |
+| `JWT_SECRET_KEY` | Required signing secret for authentication. Use a unique random value. |
+| `MONGO_URI` | MongoDB connection string. Optional for local work when using the SQLite fallback. |
+| `DB_NAME` | MongoDB database name. |
+| `LOCAL_DB_PATH` | Optional path for the SQLite fallback database. Use persistent storage in deployments. |
+| `GEMINI_API_KEY` or `GOOGLE_API_KEY` | Optional Gemini key for supported AI features. |
 | `ALLOWED_ORIGINS` | Comma-separated browser origins permitted by the API. |
-| `VITE_API_BASE_URL` | Frontend build-time variable. Set it to the deployed FastAPI origin in the frontend host (for example `https://api.example.com`); leave it blank for local Vite development. Do not add a trailing `/api`. |
 
-For MongoDB Atlas, use a **database user** in the connection URI, not your Atlas website login. Ensure the deployment's IP is allowed in the Atlas network access list. URI-encode reserved characters in the database username or password.
-
-## Persistence and database fallback
-
-When MongoDB is reachable, the API uses it for application data. If MongoDB cannot be reached, the backend uses SQLite for accounts, sessions, brand guidelines, analysis history, and review decisions. The default local database file is `backend/data/brandithm.sqlite3`; it is ignored by Git.
-
-The SQLite fallback belongs to the backend server and is not shared between multiple server instances. Configure `LOCAL_DB_PATH` and persistent disk/volume storage for deployments. Browser-local drafts or accounts are device-specific and are not synchronized between browsers or devices.
-
-The rule-based AI fallback can still perform basic checks, but it is not equivalent to Gemini analysis or a full AI rewrite. Configure a valid Google API key to enable Gemini features.
-
-## Deploy the backend to Railway
-
-The root `railway.json` points Railway at `backend/Dockerfile` and configures `/api/health` as the service health check. The Dockerfile builds from the repository root, listens on Railway's injected `PORT`, and stores local fallback data at `/app/data`.
-
-1. Create a Railway project from this GitHub repository. Use the repository root as the build context and keep the configured Dockerfile path as `backend/Dockerfile`.
-2. Add the backend variables in Railway's service settings: `MONGO_URI`, `DB_NAME`, `JWT_SECRET_KEY`, `ALLOWED_ORIGINS`, and optionally `GOOGLE_API_KEY`, `GEMINI_MODEL`, and `LOCAL_DB_PATH`. Use the generated Netlify site origin in `ALLOWED_ORIGINS`.
-3. If relying on SQLite fallback, attach a persistent Railway volume and set `LOCAL_DB_PATH` to a path on that volume; otherwise fallback data may be lost when the service is replaced.
-4. Generate a Railway public domain and verify `https://<your-api-domain>/api/health` returns a successful response.
-
-## Deploy the frontend to Netlify
-
-The repository includes a `netlify.toml` configured to build the Vite frontend from `frontend/`, publish `frontend/dist`, use Node.js 22, and rewrite client-side routes to `index.html`. This lets both `/` and direct links such as `/signin` load correctly on Netlify.
-
-Netlify hosts the **frontend only**. It does not run this repository's FastAPI backend. To use sign-in, analysis, guidelines, and review APIs on a deployed site:
-
-1. Import the GitHub repository into Netlify; the checked-in `netlify.toml` provides the build and SPA route configuration.
-2. Set the build environment variable `VITE_API_BASE_URL` to your Railway backend's HTTPS origin (for example `https://your-api.example.com`), without a trailing `/api`, then trigger a new deploy. Vite compiles this value into the frontend build.
-3. Set the Railway backend's `ALLOWED_ORIGINS` to include your exact Netlify site origin.
-4. If the Netlify site has site-wide access control/password protection enabled, disable it to allow public access.
-
-If the Netlify site has access control enabled, disable it to make the landing page publicly accessible. Netlify and Railway credentials/domains are configured in their respective dashboards and should not be committed to this repository.
-
-## Run with Docker
-
-1. Copy `backend/.env.example` to `backend/.env` and configure the backend values.
-2. From the repository root, build and start the services:
-
-```bash
-docker compose up --build
-```
-
-Open the frontend at [http://localhost:8080](http://localhost:8080). The API is at [http://localhost:8000](http://localhost:8000), with health status at `/api/health` and interactive API documentation at `/docs`.
-
-Docker Compose persists Chroma data in the `chroma_data` named volume and the SQLite fallback database in the `local_store_data` volume. Stop the services with `docker compose down`; use `docker compose down --volumes` only if you also intend to delete those volumes.
-
-## Application routes
-
-| Route | Description |
-| --- | --- |
-| `/` | Public landing page. |
-| `/signin` | Sign in to an account. |
-| `/signup` | Create an account. |
-| `/dashboard` | Dashboard overview and recent activity. |
-| `/analytics` | Analytics view. |
-| `/brand-intelligence` | Brand health and intelligence. |
-| `/brand-guidelines` | View and edit brand voice and content rules. |
-| `/content-analysis` | Analyze submitted content and view results. |
-| `/ai-correction` | Generate a brand-aligned correction. |
-| `/review-queue` | Review analysis reports and approve or request revisions. |
-| `/settings` | Update account information or sign out. |
-
-## API and checks
-
-- API health: `GET /api/health`
-- Account analytics: `GET /api/analytics?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD` (date range is inclusive and limited to 366 days)
-- Content analysis uploads accept supported documents and media up to 25 MB. Gemini-backed media analysis fails explicitly when the API key is missing or processing fails; it does not report a text-only fallback as a media result.
-- Interactive OpenAPI documentation: `http://localhost:8000/docs`
-- Feature APIs require a valid `Authorization: Bearer <token>` header from `/api/auth/login` or `/api/auth/register`. Data requests are scoped to the authenticated account; a supplied `user_id` must match that account.
-- Frontend lint: `cd frontend; npm run lint`
-- Frontend production build: `cd frontend; npm run build`
-- Backend syntax check: `cd backend; python -m compileall app`
+MongoDB Atlas requires a database user and network access for the backend host. If MongoDB is unavailable, SQLite data is stored on the backend host and is not shared across backend instances.
 
 ## Project structure
 
 ```text
-Brandithm/
+BrandGovernancePlatform/
 ├── backend/
 │   ├── app/
-│   │   ├── database/     # MongoDB connection and SQLite fallback
-│   │   ├── routes/       # Authentication, brand, content, and health APIs
-│   │   ├── config.py
-│   │   └── main.py
+│   │   ├── database/       # MongoDB and SQLite persistence
+│   │   ├── routes/         # Authenticated API endpoints
+│   │   ├── services/       # AI and provider integrations
+│   │   ├── config.py       # Backend environment configuration
+│   │   └── main.py         # FastAPI application
+│   ├── tests/              # Backend tests
 │   ├── .env.example
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/
-│   │   ├── components/
-│   │   ├── lib/
-│   │   └── pages/
+│   │   ├── components/     # Shared UI and navigation
+│   │   ├── lib/            # API and application helpers
+│   │   └── pages/          # Dashboard and feature pages
 │   ├── package.json
 │   └── vite.config.js
 ├── docker-compose.yml
+├── netlify.toml
+├── railway.json
 └── README.md
 ```
+
+## API and tests
+
+Feature APIs require an authenticated bearer token. Requests are scoped to the signed-in user.
+
+- `GET /api/health` — API and storage health
+- `GET /docs` — interactive OpenAPI documentation
+- `POST /api/auth/register` and `POST /api/auth/login` — account registration and sign-in
+- Content analysis and brand-guideline endpoints are documented in the interactive API docs.
+
+Run backend tests:
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+```
+
+Run frontend checks:
+
+```powershell
+cd frontend
+npm run lint
+npm run build
+```
+
+## Deployment
+
+- **Frontend:** Netlify configuration is provided by `netlify.toml`. Set `VITE_API_BASE_URL` to the backend HTTPS origin when deploying separately.
+- **Backend:** Railway configuration is provided by `railway.json` and `backend/Dockerfile`. Set backend secrets in the hosting provider, not in Git.
+- Include the deployed frontend origin in backend `ALLOWED_ORIGINS`.
+- Use persistent storage for SQLite if MongoDB is not configured.
