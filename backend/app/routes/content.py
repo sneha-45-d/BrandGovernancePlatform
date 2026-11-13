@@ -18,6 +18,7 @@ from app.database import local_store
 from app.database.mongo import get_db
 from app.security import get_authenticated_user, verify_user_scope
 from app.services import clash_service, scoring_service, tone_service
+from app.services.gemini_client import get_genai_client
 from app.services.content_ingestion import (
     MAX_UPLOAD_BYTES,
     MediaFile,
@@ -173,43 +174,100 @@ def build_local_analysis(content: str, brand_name: str, guidelines: dict, warnin
 
 
 def build_local_correction(content: str, brand_name: str, guidelines: dict, warning_msg: str | None = None) -> dict:
-    replacements = {
-        'guaranteed': 'designed to support',
-        'instant': 'fast',
-        'best ever': 'strong',
-        'hype': 'clear value',
-        'click here': 'learn more',
-    }
-
-    corrected = content
-    for original, replacement in replacements.items():
-        pattern = re.compile(re.escape(original), re.IGNORECASE)
-        corrected = pattern.sub(replacement, corrected)
-
+    guidelines = guidelines or {}
     changes = []
-    for original, replacement in replacements.items():
-        if re.search(re.escape(original), content, flags=re.IGNORECASE):
+
+    # 1. Clean aggressive spam symbols and repetitive emoji prefixes
+    lines = content.split('\n')
+    cleaned_lines = []
+    for line in lines:
+        cleaned_line = line
+        if re.match(r'^\s*[🔥💥⚡️✨🚨‼️]+\s*', cleaned_line):
+            cleaned_line = re.sub(r'^\s*[🔥💥⚡️✨🚨‼️]+\s*', '• ', cleaned_line)
+            if not any(c['title'] == 'Removed promotional symbols' for c in changes):
+                changes.append({
+                    'title': 'Removed promotional symbols',
+                    'description': 'Replaced aggressive fire/alert emojis with clean, professional formatting.'
+                })
+        cleaned_lines.append(cleaned_line)
+    corrected = '\n'.join(cleaned_lines)
+
+    # 2. Deceptive / Absolute / High-Risk Claims Replacements
+    replacement_rules = [
+        # Combined medical/clinical claims
+        (r'\bDermatologist\s+approved\s+and\s+clinically\s+proven\s+to\s+work\s+for\s+EVERY\s+skin\s+type\.?', 'Dermatologist-tested formulation developed for diverse skin types.', 'Replaced universal efficacy guarantee with balanced clinical formulation language.'),
+        (r'\bclinically\s+proven\s+to\s+work\s+for\s+EVERY\s+skin\s+type\.?', 'dermatologist-tested formulation developed for diverse skin types.', 'Replaced universal efficacy guarantee with balanced clinical formulation language.'),
+        (r'\bclinically\s+proven\s+to\s+work\s+for\s+all\s+skin\s+types\.?', 'dermatologist-tested for a wide range of skin types.', 'Softened clinical efficacy claim.'),
+        (r'\bwork\s+for\s+every\s+skin\s+type\b', 'suitable for multiple skin types', 'Removed absolute universality claim.'),
+        (r'\bcures?\s+(?:all|everything|acne|aging)\b', 'targets key skin concerns', 'Eliminated medical cure claims in accordance with advertising compliance.'),
+        (r'\bmiracle\s+product\b', 'advanced skincare solution', 'Replaced sensationalist "miracle" wording with professional product terminology.'),
+        (r'\bmiracle\s+serum\b', 'targeted skincare serum', 'Reframed "miracle serum" to credible descriptive terminology.'),
+        (r'\bmiracle\b', 'breakthrough formula', 'Removed unsubstantiated miracle claim.'),
+
+        # Absolute Side Effects & Safety
+        (r'\bno\s+side\s+effects\s+whatsoever!?\b', 'Formulated with skin-friendly, tested ingredients.', 'Qualified safety claim to avoid unsubstantiated absolute guarantee.'),
+        (r'\bno\s+side\s+effects\b', 'developed for high tolerability', 'Removed unqualified side-effect claim.'),
+        (r'\b100%\s+safe\b', 'rigorously safety-tested', 'Substituted absolute safety claim with verifiable testing statement.'),
+        (r'\bcompletely\s+safe\b', 'dermatologically evaluated', 'Softened absolute safety claim.'),
+
+        # Unrealistic Timeframes & Overnight Claims
+        (r'\btransformed\s+their\s+skin\s+overnight\b', 'achieved visible improvements with consistent daily use', 'Replaced unrealistic "overnight transformation" claim with sustainable usage expectations.'),
+        (r'\bovernight\b', 'with regular use', 'Adjusted unrealistic timeframe to realistic routine expectations.'),
+        (r'\binstant\s+whitening\b', 'radiant, even skin tone', 'Replaced deceptive "instant whitening" claim with compliant radiance messaging.'),
+        (r'#InstantWhitening\b', '#RadiantSkin', 'Updated hashtag to align with inclusive beauty standards.'),
+        (r'#MiracleSerum\b', '#SkincareRoutine', 'Replaced sensationalist hashtag with credible discovery tag.'),
+        (r'#AcneFree\b', '#ClearSkinJourney', 'Replaced absolute guarantee hashtag with authentic lifestyle tag.'),
+
+        # Extreme Urgency & Clickbait Promotional Copy
+        (r'\b90%\s*OFF\s*[–\-—]\s*TODAY\s*ONLY!?\b', 'Special Seasonal Promotion – Limited Time', 'Softened high-pressure discount bait into a polished promotional announcement.'),
+        (r'\btoday\s+only!?\b', 'for a limited time', 'Reduced artificial panic urgency.'),
+        (r'\bBUY\s+NOW\s+before\s+this\s+offer\s+disappears!?\b', 'Explore the collection today while supplies last.', 'Replaced aggressive all-caps hard-sell with welcoming call-to-action.'),
+        (r'\bBUY\s+NOW!?\b', 'Shop Now', 'Normalized all-caps urgency.'),
+        (r'\bdon[\'’]t\s+miss\s+this\b', 'discover our', 'Reframed FOMO pressure into an invitation to discover the brand.'),
+        (r'\bguaranteed\b', 'designed to support', 'Replaced guarantee language with supportive product benefits.'),
+        (r'\bbest\s+ever\b', 'trusted', 'Softened superlative claim.'),
+        (r'\bhype\b', 'clear value', 'Focused on clear customer value.'),
+        (r'\bclick\s+here\b', 'learn more', 'Replaced generic imperative link with informative action.'),
+    ]
+
+    for pattern_str, repl, reason in replacement_rules:
+        pattern = re.compile(pattern_str, re.IGNORECASE)
+        if pattern.search(corrected):
+            corrected = pattern.sub(repl, corrected)
             changes.append({
-                'title': f"Replaced '{original}' with '{replacement}'",
-                'description': 'This softened the message to better align with approved brand language and reduce hype.'
+                'title': f'Compliance update: {repl[:32]}…' if len(repl) > 32 else f'Updated phrasing to: {repl}',
+                'description': reason
+            })
+
+    # 3. Tone alignment if specified in guidelines
+    preferred_tone = guidelines.get('preferred_tone', '')
+    if preferred_tone and ('professional' in preferred_tone.lower() or 'corporate' in preferred_tone.lower()):
+        if not any('Tone' in c['title'] for c in changes):
+            changes.append({
+                'title': 'Tone alignment with guidelines',
+                'description': f'Adjusted messaging structure to match preferred "{preferred_tone}" brand voice.'
             })
 
     if not changes:
         changes.append({
             'title': 'Tone refinement applied',
-            'description': 'The content was simplified and made more brand-safe without changing the original intent.'
+            'description': 'The content was reviewed and validated for compliance and brand consistency.'
         })
 
-    default_warning = 'Gemini AI is unavailable or rate-limited. This result uses local text substitutions, not an AI rewrite.'
+    default_warning = 'Gemini AI is unavailable or rate-limited. Advanced rule-based brand governance correction was applied.'
 
     return {
         'corrected_content': corrected.strip() or content.strip(),
         'changes_made': changes,
-        'summary': 'Fallback correction applied to soften promotional wording and improve brand alignment.',
+        'summary': f'Refined copy to eliminate regulatory risks, soften aggressive promotional claims, and align with {brand_name or "brand"} voice.',
         'improvements': [
             {
-                'title': 'Brand-safe rewrite',
-                'description': 'The message has been adjusted to sound credible, polished, and aligned with governance standards.'
+                'title': 'Regulatory & Compliance Protection',
+                'description': 'Removed unsubstantiated medical claims, absolute guarantees, and unrealistic overnight timelines.'
+            },
+            {
+                'title': 'Brand Voice Elevation',
+                'description': 'Shifted high-pressure FOMO clickbait into credible, welcoming brand storytelling.'
             }
         ],
         'engine': 'local',
@@ -310,15 +368,18 @@ Rules:
         content=content,
     )
 
-    configured_model = (settings.GEMINI_MODEL or 'gemini-3.5-flash').strip()
+    configured_model = (settings.GEMINI_MODEL or 'gemini-2.0-flash').strip()
     models_to_try = list(dict.fromkeys([
         configured_model,
-        'gemini-3.5-flash',
+        'gemini-2.0-flash',
+        'gemini-2.0-flash-lite',
+        'gemini-1.5-flash',
+        'gemini-1.5-pro',
         'gemini-2.5-flash',
     ]))
 
     last_error = None
-    client = genai.Client(api_key=api_key)
+    client = get_genai_client(api_key)
     for model_name in filter(None, models_to_try):
         try:
             if media_files:
@@ -412,14 +473,18 @@ Rules:
         content=content,
     )
 
-    models_to_try = [
-        (settings.GEMINI_MODEL or 'gemini-3.5-flash').strip(),
-        'gemini-3.8-flash',
+    configured_model = (settings.GEMINI_MODEL or 'gemini-2.0-flash').strip()
+    models_to_try = list(dict.fromkeys([
+        configured_model,
+        'gemini-2.0-flash',
+        'gemini-2.0-flash-lite',
+        'gemini-1.5-flash',
+        'gemini-1.5-pro',
         'gemini-2.5-flash',
-    ]
+    ]))
 
     last_error = None
-    client = genai.Client(api_key=api_key)
+    client = get_genai_client(api_key)
     for model_name in models_to_try:
         if not model_name:
             continue

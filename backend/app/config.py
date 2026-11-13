@@ -20,7 +20,7 @@ class Settings:
     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'dev-secret-key')
     GEMINI_API_KEY = (os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY') or '').strip()
     GOOGLE_API_KEY = GEMINI_API_KEY
-    GEMINI_MODEL = (os.getenv('GEMINI_MODEL') or 'gemini-3.5-flash').strip()
+    GEMINI_MODEL = (os.getenv('GEMINI_MODEL') or 'gemini-2.0-flash').strip()
     SOCIAL_OAUTH_ENCRYPTION_KEY = os.getenv('SOCIAL_OAUTH_ENCRYPTION_KEY', '').strip()
     SOCIAL_PROVIDER_SETTINGS = {
         'instagram': {'client_id': os.getenv('META_APP_ID', '').strip(), 'client_secret': os.getenv('META_APP_SECRET', '').strip(), 'redirect_uri': (os.getenv('INSTAGRAM_REDIRECT_URI') or os.getenv('META_REDIRECT_URI') or '').strip()},
