@@ -1,3 +1,4 @@
+import gc
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -8,7 +9,7 @@ from fastapi.testclient import TestClient
 from pymongo.errors import ServerSelectionTimeoutError
 
 from app.config import settings
-from app.database import social_store
+from app.database import local_store, social_store
 from app.main import app
 from app.security import get_authenticated_user
 from app.services import social_intelligence
@@ -23,6 +24,7 @@ class SocialRouteTests(unittest.TestCase):
             f'{self.temp_dir.name}\\routes-test.sqlite3',
         )
         self.database_path_patch.start()
+        local_store.ensure_db_ready()
         self.mongo_patch = patch(
             'app.database.social_store.get_db',
             side_effect=ServerSelectionTimeoutError('MongoDB unavailable in isolated test'),
@@ -42,6 +44,7 @@ class SocialRouteTests(unittest.TestCase):
         self.auth_override.stop()
         self.mongo_patch.stop()
         self.database_path_patch.stop()
+        gc.collect()
         try:
             self.temp_dir.cleanup()
         except Exception:

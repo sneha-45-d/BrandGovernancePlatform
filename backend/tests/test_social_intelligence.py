@@ -1,4 +1,5 @@
 import asyncio
+import gc
 import hashlib
 import tempfile
 import unittest
@@ -12,7 +13,7 @@ from cryptography.fernet import Fernet
 import httpx
 
 from app.config import settings
-from app.database import social_store
+from app.database import local_store, social_store
 from app.services import social_intelligence
 from app.services import social_oauth
 
@@ -23,6 +24,7 @@ class SocialIntelligenceTests(unittest.TestCase):
         self.database_path = f'{self.temp_dir.name}\\social-test.sqlite3'
         self.database_path_patch = patch.object(settings, 'LOCAL_DB_PATH', self.database_path)
         self.database_path_patch.start()
+        local_store.ensure_db_ready()
         self.mongo_patch = patch(
             'app.database.social_store.get_db',
             side_effect=ServerSelectionTimeoutError('MongoDB unavailable in isolated test'),
@@ -33,6 +35,7 @@ class SocialIntelligenceTests(unittest.TestCase):
     def tearDown(self):
         self.mongo_patch.stop()
         self.database_path_patch.stop()
+        gc.collect()
         try:
             self.temp_dir.cleanup()
         except Exception:

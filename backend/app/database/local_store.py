@@ -401,28 +401,42 @@ def get_analysis(analysis_id: str, user_id: str | None = None):
         return _analysis_dict(connection.execute(query, values).fetchone())
 
 
-def list_analyses(user_id: str, status: str | None = None, search: str | None = None, limit: int = 50):
+def list_analyses(
+    user_id: str,
+    status: str | None = None,
+    search: str | None = None,
+    limit: int | None = 50,
+    title_prefix: str | None = None,
+):
     query = 'SELECT * FROM content_analyses WHERE user_id = ?'
     values: list = [user_id]
     if status:
         query += ' AND status = ?'
         values.append(status)
-    query += ' ORDER BY created_at DESC LIMIT ?'
-    values.append(limit)
     term = (search or '').strip().lower()
+    prefix = (title_prefix or '').strip().lower()
+    if prefix:
+        pattern = f"{prefix.replace('!', '!!').replace('%', '!%').replace('_', '!_')}%"
+        query += " AND LOWER(content_title) LIKE ? ESCAPE '!'"
+        values.append(pattern)
+    elif term:
+        pattern = f"%{term.replace('!', '!!').replace('%', '!%').replace('_', '!_')}%"
+        query += '''
+            AND (
+                LOWER(brand_name) LIKE ? ESCAPE '!'
+                OR LOWER(content_title) LIKE ? ESCAPE '!'
+                OR LOWER(content) LIKE ? ESCAPE '!'
+                OR LOWER(COALESCE(json_extract(analysis, '$.summary'), '')) LIKE ? ESCAPE '!'
+            )
+        '''
+        values.extend([pattern, pattern, pattern, pattern])
+    query += ' ORDER BY created_at DESC'
+    if limit is not None:
+        query += ' LIMIT ?'
+        values.append(limit)
     with _connect() as connection:
         rows = connection.execute(query, values).fetchall()
-    results = [_analysis_dict(row) for row in rows]
-    if term:
-        results = [
-            item for item in results
-            if term in ' '.join([
-                (item.get('analysis') or {}).get('summary') or '',
-                item.get('brand_name') or '',
-                item.get('content_title') or '',
-            ]).lower()
-        ]
-    return results
+    return [_analysis_dict(row) for row in rows]
 
 
 def list_analyses_between(user_id: str, start_at: str, end_before: str) -> list[dict]:

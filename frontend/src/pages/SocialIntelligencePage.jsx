@@ -171,6 +171,7 @@ export default function SocialIntelligencePage({ section = 'overview' }) {
   const [config, setConfig] = useState(null)
   const [configLoading, setConfigLoading] = useState(true)
   const [connections, setConnections] = useState([])
+  const [auditSummaryLoading, setAuditSummaryLoading] = useState(true)
   const [competitors, setCompetitors] = useState([])
   const [competitorsLoading, setCompetitorsLoading] = useState(true)
   const [mentions, setMentions] = useState([])
@@ -323,6 +324,7 @@ export default function SocialIntelligencePage({ section = 'overview' }) {
 
   const fetchPosts = () => {
     setPostsLoading(true)
+    setAuditSummaryLoading(true)
     axios.get('/api/social/posts', { params: currentUserParams })
       .then(({ data }) => setPosts(data.posts || []))
       .catch((err) => setError(getApiErrorMessage(err, 'Unable to load posts.')))
@@ -330,7 +332,11 @@ export default function SocialIntelligencePage({ section = 'overview' }) {
 
     axios.get('/api/social/posts/audit-summary', { params: currentUserParams })
       .then(({ data }) => setAuditSummary(data))
-      .catch(() => {})
+      .catch((err) => {
+        setAuditSummary(null)
+        setError(getApiErrorMessage(err, 'Unable to load post safety summary.'))
+      })
+      .finally(() => setAuditSummaryLoading(false))
   }
 
   const fetchStrategy = () => {
@@ -673,6 +679,18 @@ export default function SocialIntelligencePage({ section = 'overview' }) {
   }), [mentionSort, mentions])
 
   const metrics = overview?.overview
+  const auditedPostCount = Number(auditSummary?.audited_count) || 0
+  const totalPostCount = Number(auditSummary?.total_posts) || 0
+  const safetyScore = auditedPostCount > 0 && Number.isFinite(Number(auditSummary?.average_safety_score))
+    ? Number(auditSummary.average_safety_score)
+    : null
+  const safetyDetail = auditSummaryLoading
+    ? 'Loading post audit data'
+    : !auditSummary
+      ? 'Post safety data is unavailable'
+      : totalPostCount === 0
+        ? 'Add a brand post to start monitoring'
+        : `${auditedPostCount} of ${totalPostCount} posts audited · ${auditSummary.critical_count || 0} critical findings`
   const aiAnalyzedMentions = mentions.filter((mention) => mention.sentiment_data?.topic)
   const recurringConcerns = useMemo(() => {
     const counts = new Map()
@@ -689,11 +707,13 @@ export default function SocialIntelligencePage({ section = 'overview' }) {
   }, [mentions])
   const handleRangeChange = (value) => {
     setRangePreset(value)
-    setOverviewLoading(true)
+    setError('')
     if (value !== 'custom') {
+      setOverviewLoading(true)
       setDays(Number(value))
       return
     }
+    setOverviewLoading(Boolean(customStart && customEnd))
     const end = new Date()
     const start = new Date(end.getTime() - 29 * 24 * 60 * 60 * 1000)
     setCustomStart(start.toISOString().slice(0, 10))
@@ -746,7 +766,7 @@ export default function SocialIntelligencePage({ section = 'overview' }) {
                     <select aria-label="Overview period" value={rangePreset} onChange={(event) => handleRangeChange(event.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
                       <option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="custom">Custom range</option>
                     </select>
-                    <select aria-label="Filter by platform" value={platformFilter} onChange={(event) => { setOverviewLoading(true); setPlatformFilter(event.target.value) }} className="max-w-36 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
+                    <select aria-label="Filter by platform" value={platformFilter} onChange={(event) => { setOverviewLoading(true); setError(''); setPlatformFilter(event.target.value) }} className="max-w-36 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
                       <option value="">All platforms</option>{platforms.map((item) => <option key={item} value={item}>{platformLabels[item]}</option>)}
                     </select>
                   </div>
@@ -754,16 +774,28 @@ export default function SocialIntelligencePage({ section = 'overview' }) {
               />
               {rangePreset === 'custom' && (
                 <div className="mb-4 flex flex-wrap items-end gap-3">
-                  <label className="text-xs text-slate-500">From<input type="date" value={customStart} onChange={(event) => { setOverviewLoading(true); setCustomStart(event.target.value) }} className="mt-1 block rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" /></label>
-                  <label className="text-xs text-slate-500">To<input type="date" value={customEnd} onChange={(event) => { setOverviewLoading(true); setCustomEnd(event.target.value) }} className="mt-1 block rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" /></label>
+                  <label className="text-xs text-slate-500">From<input type="date" value={customStart} max={customEnd || undefined} onChange={(event) => { const value = event.target.value; setError(''); setCustomStart(value); setOverviewLoading(Boolean(value && customEnd)) }} className="mt-1 block rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" /></label>
+                  <label className="text-xs text-slate-500">To<input type="date" value={customEnd} min={customStart || undefined} onChange={(event) => { const value = event.target.value; setError(''); setCustomEnd(value); setOverviewLoading(Boolean(customStart && value)) }} className="mt-1 block rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" /></label>
                 </div>
               )}
               <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <MetricCard label="Total brand mentions" value={metrics?.total_mentions ?? '—'} detail="Saved records in the selected period" icon={MessageCircleMore} />
                 <MetricCard label="Positive mentions" value={metrics?.positive_mentions ?? '—'} detail="AI-classified positive" icon={ThumbsUp} />
                 <MetricCard label="Negative mentions" value={metrics?.negative_mentions ?? '—'} detail="AI-classified negative" icon={ThumbsDown} tint="rose" />
-                <MetricCard label="Post Safety Score" value={auditSummary?.average_safety_score != null ? `${auditSummary.average_safety_score}/100` : '100/100'} detail={`${auditSummary?.critical_count ?? 0} critical false claims flagged`} icon={ShieldCheck} tint={auditSummary?.average_safety_score < 70 ? 'rose' : 'emerald'} />
-                <MetricCard label="Monitored Brand Posts" value={auditSummary?.total_posts ?? 0} detail={`${auditSummary?.audited_count ?? 0} audited posts across channels`} icon={Sparkles} tint="blue" />
+                <MetricCard
+                  label="Post Safety Score"
+                  value={auditSummaryLoading ? '…' : safetyScore === null ? '—' : `${safetyScore}/100`}
+                  detail={safetyDetail}
+                  icon={ShieldCheck}
+                  tint={safetyScore === null ? 'slate' : safetyScore < 70 ? 'rose' : 'emerald'}
+                />
+                <MetricCard
+                  label="Monitored Brand Posts"
+                  value={auditSummaryLoading ? '…' : auditSummary ? totalPostCount : '—'}
+                  detail={auditSummary ? `${auditedPostCount} audited across channels` : safetyDetail}
+                  icon={Sparkles}
+                  tint="blue"
+                />
                 <MetricCard label="Neutral mentions" value={metrics?.neutral_mentions ?? '—'} detail="AI-classified neutral" icon={Activity} tint="slate" />
                 <MetricCard label="Total engagement" value={metrics?.total_engagement?.toLocaleString() ?? '—'} detail="Sum of user-submitted likes, comments, and shares" icon={Heart} tint="blue" />
                 <MetricCard label="Reputation score" value={metrics?.reputation_score == null ? '—' : `${metrics.reputation_score}%`} detail="Positive share of AI-classified mentions" icon={ShieldAlert} tint="amber" />

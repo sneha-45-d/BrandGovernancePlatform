@@ -693,38 +693,58 @@ def get_content_history(
     user_id: str = Query(...),
     status: str | None = None,
     search: str | None = None,
+    search_title_prefix: bool = False,
     current_user: dict = Depends(get_authenticated_user),
 ):
     user_id = verify_user_scope(current_user, user_id)
     query = {'user_id': user_id}
     if status:
         query['status'] = status
+    search_term = (search or '').strip()
+    prefix_search = bool(search_term and search_title_prefix)
+    if search_term:
+        escaped_search = re.escape(search_term)
+        if prefix_search:
+            query['$or'] = [
+                {field: {'$regex': f'^{escaped_search}', '$options': 'i'}}
+                for field in ('content_title', 'title')
+            ]
+        else:
+            query['$or'] = [
+                {field: {'$regex': escaped_search, '$options': 'i'}}
+                for field in ('brand_name', 'content_title', 'title', 'content', 'analysis.summary')
+            ]
 
     try:
-        local_items = local_store.list_analyses(user_id, status=status, search=search, limit=50)
+        local_items = local_store.list_analyses(
+            user_id,
+            status=status,
+            search=None if prefix_search else search_term,
+            limit=None if prefix_search else 50,
+            title_prefix=search_term if prefix_search else None,
+        )
     except sqlite3.Error as exc:
         logger.exception('Unable to load analysis history from local server storage')
         raise HTTPException(status_code=503, detail='Analysis history is unavailable from local server storage.') from exc
     try:
-        items = list(
-            content_collection.find(
-                query,
-                {
-                    'user_id': 1,
-                    'brand_name': 1,
-                    'content_title': 1,
-                    'title': 1,
-                    'analysis.summary': 1,
-                    'analysis.overall_score': 1,
-                    'analysis.brand_compliance_score': 1,
-                    'status': 1,
-                    'review_status': 1,
-                    'created_at': 1,
-                },
-            )
-            .sort('created_at', -1)
-            .limit(50)
-        )
+        projection = {
+            'user_id': 1,
+            'brand_name': 1,
+            'content_title': 1,
+            'title': 1,
+            'analysis.summary': 1,
+            'analysis.overall_score': 1,
+            'analysis.brand_compliance_score': 1,
+            'status': 1,
+            'review_status': 1,
+            'created_at': 1,
+        }
+        if search_term and not prefix_search:
+            projection['content'] = 1
+        cursor = content_collection.find(query, projection).sort('created_at', -1)
+        if not prefix_search:
+            cursor = cursor.limit(50)
+        items = list(cursor)
     except PyMongoError:
         logger.warning('MongoDB unavailable; loading analysis history from local server storage')
         return {
@@ -734,6 +754,7 @@ def get_content_history(
                     'brand_name': item.get('brand_name') or 'BRANDITHM',
                     'title': item.get('content_title') or 'Untitled analysis',
                     'summary': (item.get('analysis') or {}).get('summary') or '',
+                    **({'content': item.get('content') or ''} if search_term and not prefix_search else {}),
                     'overall_score': (item.get('analysis') or {}).get('overall_score'),
                     'compliance_score': (item.get('analysis') or {}).get('brand_compliance_score'),
                     'status': item.get('status') or 'completed',
@@ -746,19 +767,26 @@ def get_content_history(
         }
 
     filtered = []
-    search_term = (search or '').strip().lower()
+    normalized_search = search_term.lower()
     for item in items:
         analysis_summary = (item.get('analysis') or {}).get('summary') or ''
         brand_name = item.get('brand_name') or ''
         content_title = item.get('content_title') or item.get('title') or ''
-        if search_term and search_term not in ' '.join([analysis_summary, brand_name, content_title]).lower():
-            continue
+        content_text = item.get('content') or ''
+        if normalized_search:
+            if prefix_search and not content_title.lower().startswith(normalized_search):
+                continue
+            if not prefix_search and normalized_search not in ' '.join([
+                analysis_summary, brand_name, content_title, content_text,
+            ]).lower():
+                continue
 
         filtered.append({
             'id': str(item.get('_id')),
             'brand_name': brand_name,
             'title': content_title,
             'summary': analysis_summary,
+            **({'content': content_text} if normalized_search and not prefix_search else {}),
             'overall_score': (item.get('analysis') or {}).get('overall_score'),
             'compliance_score': (item.get('analysis') or {}).get('brand_compliance_score'),
             'status': item.get('status') or 'completed',
@@ -783,7 +811,10 @@ def get_content_history(
             'created_at': item.get('created_at'),
         })
     filtered.sort(key=lambda item: str(item.get('created_at') or ''), reverse=True)
-    return {'history': filtered[:50], 'storage': 'mongodb' if not local_items else 'mixed'}
+    return {
+        'history': filtered if prefix_search else filtered[:50],
+        'storage': 'mongodb' if not local_items else 'mixed',
+    }
 
 
 @router.get('/content/{analysis_id}')
