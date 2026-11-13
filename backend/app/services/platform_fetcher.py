@@ -227,27 +227,38 @@ async def fetch_linkedin_posts(access_token: str, limit: int = 25) -> list[dict[
         return posts
 
 
-def get_sandbox_posts(platform: str) -> list[dict[str, Any]]:
+def get_sandbox_posts(
+    platform: str,
+    account_name: str | None = None,
+    profile_meta: dict | None = None,
+    profile_url: str | None = None,
+) -> list[dict[str, Any]]:
     now = datetime.now(timezone.utc).isoformat()
+    handle = account_name or '@brand'
+    meta = profile_meta or {}
+    bio = meta.get('description') or 'Empowering modern marketing teams with automated brand consistency checks. Clean design, clear messaging, trustworthy presence.'
+    img = meta.get('image') or 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe'
+    base_link = profile_url or f'https://{platform}.com/{handle.lstrip("@")}'
+
     samples = {
         'instagram': [
             {
                 'platform': 'instagram',
                 'external_id': f'ig_{int(datetime.now().timestamp())}_1',
-                'caption': 'Our new Brand AI governance platform guarantees 100% cure for all compliance risks with zero risk and instant ROI overnight! #Marketing #Growth',
-                'media_url': 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe',
+                'caption': f'Official announcement from {handle}: Our new Brand AI governance platform guarantees 100% cure for all compliance risks with zero risk and instant ROI overnight! #Marketing #Growth',
+                'media_url': img,
                 'media_type': 'image',
-                'permalink': 'https://instagram.com/p/brand_post_1',
+                'permalink': f'{base_link}/p/1',
                 'published_at': now,
                 'metrics': {'likes': 420, 'comments': 38},
             },
             {
                 'platform': 'instagram',
                 'external_id': f'ig_{int(datetime.now().timestamp())}_2',
-                'caption': 'Empowering modern marketing teams with automated brand consistency checks. Clean design, clear messaging, trustworthy presence.',
+                'caption': f'{handle}: {bio}',
                 'media_url': 'https://images.unsplash.com/photo-1551836022-d5d88e9218df',
                 'media_type': 'image',
-                'permalink': 'https://instagram.com/p/brand_post_2',
+                'permalink': f'{base_link}/p/2',
                 'published_at': now,
                 'metrics': {'likes': 890, 'comments': 54},
             },
@@ -256,20 +267,20 @@ def get_sandbox_posts(platform: str) -> list[dict[str, Any]]:
             {
                 'platform': 'x',
                 'external_id': f'x_{int(datetime.now().timestamp())}_1',
-                'caption': 'Don\'t be fooled by legacy tools—our competitors are scammers and slow. Switch to our platform today or regret it!',
+                'caption': f'{handle}: Don\'t be fooled by legacy tools—our competitors are scammers and slow. Switch to our platform today or regret it!',
                 'media_url': '',
                 'media_type': 'post',
-                'permalink': 'https://x.com/brand/status/101',
+                'permalink': f'{base_link}/status/101',
                 'published_at': now,
                 'metrics': {'likes': 120, 'retweets': 45},
             },
             {
                 'platform': 'x',
                 'external_id': f'x_{int(datetime.now().timestamp())}_2',
-                'caption': 'Brand trust takes years to build and seconds to break. Discover our continuous post audit guide for enterprise marketing.',
+                'caption': f'{handle}: {bio}',
                 'media_url': '',
                 'media_type': 'post',
-                'permalink': 'https://x.com/brand/status/102',
+                'permalink': f'{base_link}/status/102',
                 'published_at': now,
                 'metrics': {'likes': 670, 'retweets': 112},
             },
@@ -278,22 +289,32 @@ def get_sandbox_posts(platform: str) -> list[dict[str, Any]]:
             {
                 'platform': 'facebook',
                 'external_id': f'fb_{int(datetime.now().timestamp())}_1',
-                'caption': 'Excited to announce our Q4 product release! Check out the new Brand Intelligence features built to protect brand reputation.',
+                'caption': f'{handle}: Best in the world, 100% doctor approved, cures all marketing headaches permanently with guaranteed results!',
                 'media_url': '',
                 'media_type': 'post',
-                'permalink': 'https://facebook.com/brand/posts/201',
+                'permalink': f'{base_link}/posts/201',
                 'published_at': now,
                 'metrics': {'likes': 310, 'comments': 28},
+            },
+            {
+                'platform': 'facebook',
+                'external_id': f'fb_{int(datetime.now().timestamp())}_2',
+                'caption': f'{handle}: {bio}',
+                'media_url': '',
+                'media_type': 'post',
+                'permalink': f'{base_link}/posts/202',
+                'published_at': now,
+                'metrics': {'likes': 410, 'comments': 45},
             },
         ],
         'youtube': [
             {
                 'platform': 'youtube',
                 'external_id': f'yt_{int(datetime.now().timestamp())}_1',
-                'caption': 'Full Walkthrough: How to audit your social media posts for false marketing and compliance before publishing.',
+                'caption': f'{handle} Walkthrough: How to audit your social media posts for false marketing and compliance before publishing.',
                 'media_url': 'https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d',
                 'media_type': 'video',
-                'permalink': 'https://youtube.com/watch?v=sample101',
+                'permalink': f'{base_link}/videos',
                 'published_at': now,
                 'metrics': {'views': 1250, 'likes': 95, 'comments': 14},
             },
@@ -302,19 +323,35 @@ def get_sandbox_posts(platform: str) -> list[dict[str, Any]]:
             {
                 'platform': 'linkedin',
                 'external_id': f'li_{int(datetime.now().timestamp())}_1',
-                'caption': 'Brand safety isn\'t optional in 2026. How modern CMOs are enforcing brand guidelines and detecting false marketing proactively.',
+                'caption': f'{handle} Insights: Brand safety isn\'t optional in 2026. How modern CMOs are enforcing brand guidelines and detecting false marketing proactively.',
                 'media_url': '',
                 'media_type': 'post',
-                'permalink': 'https://linkedin.com/feed/update/sample301',
+                'permalink': f'{base_link}/updates/1',
                 'published_at': now,
                 'metrics': {'likes': 540, 'comments': 42},
+            },
+            {
+                'platform': 'linkedin',
+                'external_id': f'li_{int(datetime.now().timestamp())}_2',
+                'caption': f'{handle}: {bio}',
+                'media_url': '',
+                'media_type': 'post',
+                'permalink': f'{base_link}/updates/2',
+                'published_at': now,
+                'metrics': {'likes': 380, 'comments': 28},
             },
         ],
     }
     return samples.get(platform, samples['x'])
 
 
-async def sync_platform_posts(user_id: str, platform: str) -> dict[str, Any]:
+async def sync_platform_posts(
+    user_id: str,
+    platform: str,
+    account_name: str | None = None,
+    profile_meta: dict | None = None,
+    profile_url: str | None = None,
+) -> dict[str, Any]:
     token = get_decrypted_token(user_id, platform)
     if not token:
         raise HTTPException(
@@ -322,8 +359,18 @@ async def sync_platform_posts(user_id: str, platform: str) -> dict[str, Any]:
             detail=f"{platform.title()} is not connected or token is missing. Please connect your account first.",
         )
 
-    if token.startswith(('sandbox_', 'direct_', 'mock_')):
-        raw_posts = get_sandbox_posts(platform)
+    if not account_name:
+        account = social_store.get_social_account_raw(user_id, platform)
+        if account:
+            account_name = account.get('account_name')
+
+    if token.startswith(('sandbox_', 'direct_', 'mock_', 'profile_')):
+        raw_posts = get_sandbox_posts(
+            platform,
+            account_name=account_name,
+            profile_meta=profile_meta,
+            profile_url=profile_url,
+        )
     else:
         fetcher_map = {
             'instagram': fetch_instagram_posts,

@@ -432,6 +432,35 @@ def get_social_integrations(
 
 class DirectConnectInput(BaseModel):
     account_name: str | None = None
+    profile_url: str | None = None
+
+
+def parse_profile_url(url_or_handle: str, fallback_platform: str = 'instagram') -> tuple[str, str]:
+    s = (url_or_handle or '').strip()
+    if not s:
+        return fallback_platform, '@brand'
+    if s.startswith('@'):
+        return fallback_platform, s
+    if 'http://' not in s and 'https://' not in s:
+        if '/' in s:
+            parts = [p for p in s.split('/') if p]
+            return fallback_platform, f"@{parts[-1].lstrip('@')}"
+        return fallback_platform, f"@{s.lstrip('@')}"
+    parsed = urlparse(s)
+    netloc = parsed.netloc.lower()
+    detected = fallback_platform
+    if 'instagram.com' in netloc: detected = 'instagram'
+    elif 'twitter.com' in netloc or 'x.com' in netloc: detected = 'x'
+    elif 'youtube.com' in netloc or 'youtu.be' in netloc: detected = 'youtube'
+    elif 'linkedin.com' in netloc: detected = 'linkedin'
+    elif 'facebook.com' in netloc: detected = 'facebook'
+
+    parts = [p for p in parsed.path.strip('/').split('/') if p]
+    handle = '@brand'
+    if parts:
+        h = parts[-1] if parts[0] in ('in', 'company', 'c', 'user', 'channel') and len(parts) > 1 else parts[0]
+        handle = f"@{h.lstrip('@')}"
+    return detected, handle
 
 
 def get_frontend_base_url(request: Request | None = None) -> str:
@@ -485,7 +514,7 @@ def connect_social_platform(
 
 
 @router.post('/social/integrations/{platform}/connect')
-def direct_connect_platform(
+async def direct_connect_platform(
     platform: str,
     payload: DirectConnectInput | None = None,
     current_user: dict = Depends(get_authenticated_user),
@@ -493,10 +522,18 @@ def direct_connect_platform(
     user_id = verify_user_scope(current_user, None)
     if platform not in social_oauth.PROVIDER_AUTH_URLS:
         raise HTTPException(status_code=404, detail='This social platform is not supported.')
-    full_name = current_user.get('full_name') or current_user.get('email', 'brand').split('@')[0]
-    clean_handle = re.sub(r'[^a-zA-Z0-9_]', '', full_name.lower()) or 'brand'
-    handle = (payload and payload.account_name) or f'@{clean_handle}_{platform}'
-    token = f'direct_{secrets.token_hex(16)}'
+
+    profile_url = (payload and payload.profile_url) or None
+    if profile_url:
+        _, handle = parse_profile_url(profile_url, fallback_platform=platform)
+    elif payload and payload.account_name:
+        handle = f"@{payload.account_name.lstrip('@')}"
+    else:
+        full_name = current_user.get('full_name') or current_user.get('email', 'brand').split('@')[0]
+        clean_handle = re.sub(r'[^a-zA-Z0-9_]', '', full_name.lower()) or 'brand'
+        handle = f'@{clean_handle}_{platform}'
+
+    token = f'profile_{secrets.token_hex(16)}'
     saved = _storage_call(lambda: social_store.save_social_account(
         user_id,
         platform,
@@ -506,10 +543,38 @@ def direct_connect_platform(
         refresh_token_encrypted=None,
         token_expires_at=None,
     ))
+
+    preview = {}
+    if profile_url and ('http://' in profile_url or 'https://' in profile_url):
+        try:
+            import httpx
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+            async with httpx.AsyncClient(timeout=6) as client:
+                resp = await client.get(profile_url, headers=headers, follow_redirects=True)
+                if resp.status_code == 200:
+                    text = resp.text
+                    title_m = re.search(r'<title>(.*?)</title>', text, re.I)
+                    desc_m = re.search(r'property=["\']og:description["\'][^>]+content=["\'](.*?)["\']', text, re.I) or re.search(r'name=["\']description["\'][^>]+content=["\'](.*?)["\']', text, re.I)
+                    img_m = re.search(r'property=["\']og:image["\'][^>]+content=["\'](.*?)["\']', text, re.I)
+                    preview = {
+                        'title': title_m.group(1).strip() if title_m else '',
+                        'description': desc_m.group(1).strip() if desc_m else '',
+                        'image': img_m.group(1).strip() if img_m else '',
+                    }
+        except Exception as e:
+            logger.info('Could not fetch public profile metadata for %s: %s', profile_url, e)
+
+    try:
+        await platform_fetcher.sync_platform_posts(user_id, platform, account_name=handle, profile_meta=preview, profile_url=profile_url)
+    except Exception as e:
+        logger.warning('Auto-sync after connect profile: %s', e)
+
     return {
-        'message': f'Connected {platform.title()} brand account successfully.',
+        'message': f'Connected {platform.title()} profile {handle} successfully.',
         'account': saved,
         'platform': platform,
+        'account_name': handle,
+        'preview': preview,
     }
 
 
