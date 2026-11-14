@@ -2,6 +2,8 @@
 
 Brandithm is a brand governance platform for reviewing written content against a brand's voice, terminology, and communication guidelines. It combines a React dashboard with a FastAPI service, Gemini-powered analysis when configured, and persistent storage for accounts, guidelines, review decisions, and analysis history.
 
+live link:https://frontend-iota-pink-23.vercel.app/
+
 ## Contents
 
 - [Features](#features)
