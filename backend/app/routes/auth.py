@@ -11,6 +11,7 @@ from pymongo.errors import DuplicateKeyError, PyMongoError
 from app.database import local_store
 from app.database.mongo import get_db
 from app.security import require_user
+from app.services import demo_provisioner
 
 router = APIRouter()
 users_collection = get_db()['users']
@@ -134,6 +135,21 @@ def login_user(payload: LoginRequest):
         raise HTTPException(status_code=503, detail='Account storage is temporarily unavailable.') from exc
 
     raise HTTPException(status_code=401, detail='Email or password is incorrect.')
+
+
+@router.post('/auth/demo-login')
+def demo_login():
+    try:
+        demo_user = demo_provisioner.provision_demo_account()
+        token = local_store.create_session(demo_user['id'])
+        return {
+            'token': token,
+            'user': public_user(demo_user),
+            'storage': 'server-local',
+            'message': 'Demo evaluator session initialized successfully.',
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f'Could not initialize demo account: {exc}') from exc
 
 
 @router.get('/auth/me')

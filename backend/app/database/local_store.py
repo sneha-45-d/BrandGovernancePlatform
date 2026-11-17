@@ -620,8 +620,14 @@ def get_competitors(user_id: str) -> list[dict]:
         result = []
         for row in rows:
             item = dict(row)
-            item['slogans'] = json.loads(item.get('slogans') or '[]')
-            item['keywords'] = json.loads(item.get('keywords') or '[]')
+            try:
+                item['slogans'] = json.loads(item.get('slogans') or '[]')
+            except (json.JSONDecodeError, TypeError):
+                item['slogans'] = [s.strip() for s in (item.get('slogans') or '').split(',') if s.strip()]
+            try:
+                item['keywords'] = json.loads(item.get('keywords') or '[]')
+            except (json.JSONDecodeError, TypeError):
+                item['keywords'] = [k.strip() for k in (item.get('keywords') or '').split(',') if k.strip()]
             result.append(item)
         return result
 
@@ -635,8 +641,14 @@ def get_competitor(competitor_id: str, user_id: str) -> dict | None:
         if not row:
             return None
         item = dict(row)
-        item['slogans'] = json.loads(item.get('slogans') or '[]')
-        item['keywords'] = json.loads(item.get('keywords') or '[]')
+        try:
+            item['slogans'] = json.loads(item.get('slogans') or '[]')
+        except (json.JSONDecodeError, TypeError):
+            item['slogans'] = [s.strip() for s in (item.get('slogans') or '').split(',') if s.strip()]
+        try:
+            item['keywords'] = json.loads(item.get('keywords') or '[]')
+        except (json.JSONDecodeError, TypeError):
+            item['keywords'] = [k.strip() for k in (item.get('keywords') or '').split(',') if k.strip()]
         return item
 
 

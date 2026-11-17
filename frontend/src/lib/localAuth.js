@@ -95,3 +95,12 @@ export function updateLocalAccount(user, updates) {
   localStorage.setItem(localAccountsKey, JSON.stringify(nextAccounts))
   return updatedUser
 }
+
+export function getDemoLocalSession() {
+  const account = {
+    id: 'user_demo_evaluator',
+    full_name: 'Evaluator Demo Account',
+    email: 'demo@brandithm.com',
+  }
+  return makeSession(account)
+}

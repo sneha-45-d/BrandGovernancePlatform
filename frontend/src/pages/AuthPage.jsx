@@ -15,7 +15,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth-context'
 import { getApiErrorMessage } from '../lib/apiError'
-import { loginLocalAccount, registerLocalAccount } from '../lib/localAuth'
+import { getDemoLocalSession, loginLocalAccount, registerLocalAccount } from '../lib/localAuth'
 
 const brandFeatures = [
   { icon: Sparkles, text: 'AI-Powered Brand Intelligence' },
@@ -47,6 +47,36 @@ export default function AuthPage({ mode = 'signin' }) {
       ...current,
       [name]: type === 'checkbox' ? checked : value,
     }))
+    setError('')
+  }
+
+  const handleDemoLogin = async () => {
+    setIsSubmitting(true)
+    setError('')
+    try {
+      let session
+      try {
+        const { data } = await axios.post('/api/auth/demo-login', {}, { timeout: 12000 })
+        session = data
+      } catch (err) {
+        session = getDemoLocalSession()
+      }
+      signIn(session, true)
+      navigate('/dashboard', { replace: true })
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to sign in with demo account.'))
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleFillDemoCredentials = () => {
+    setFormData({
+      full_name: 'Evaluator Demo Account',
+      email: 'demo@brandithm.com',
+      password: 'DemoEvaluator2026!',
+      rememberMe: true,
+    })
     setError('')
   }
 
@@ -174,6 +204,49 @@ export default function AuthPage({ mode = 'signin' }) {
             <p className="mb-5 text-lg text-slate-500">
               {isSignIn ? 'Sign in to continue managing your brand.' : 'Create your secure workspace to manage your brand.'}
             </p>
+
+            {isSignIn && (
+              <div className="mb-6 rounded-2xl border border-emerald-300 bg-gradient-to-br from-emerald-50 via-teal-50/60 to-white p-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-600 text-white shadow-sm">
+                      <Sparkles className="h-4 w-4" />
+                    </span>
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-950">
+                        Evaluator Instant Demo Login
+                      </h4>
+                      <p className="text-[11px] text-slate-600">
+                        Instant pre-configured testing account with multi-level content analyses, guidelines, and audited posts.
+                      </p>
+                    </div>
+                  </div>
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-extrabold text-emerald-800">
+                    1-CLICK ACCESS
+                  </span>
+                </div>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2 pt-1 border-t border-emerald-200/50">
+                  <button
+                    type="button"
+                    onClick={handleDemoLogin}
+                    disabled={isSubmitting}
+                    className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-emerald-800 transition disabled:opacity-75"
+                  >
+                    <Zap className="h-3.5 w-3.5" /> Sign In with Demo Account
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleFillDemoCredentials}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
+                    title="Fill demo@brandithm.com into the login form below"
+                  >
+                    Fill Credentials
+                  </button>
+                </div>
+              </div>
+            )}
 
             <form className="space-y-4" onSubmit={handleSubmit} noValidate>
               {!isSignIn && (

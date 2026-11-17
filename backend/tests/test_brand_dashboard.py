@@ -34,6 +34,18 @@ class BrandDashboardTests(unittest.TestCase):
         self.assertEqual(result['recent_analyses'][0]['id'], 'report-1')
         self.assertTrue(result['recent_analyses'][0]['has_critical_findings'])
 
+    def test_demo_account_provisioning_and_login(self):
+        from fastapi.testclient import TestClient
+        from app.main import app
+
+        client = TestClient(app)
+        resp = client.post('/api/auth/demo-login')
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn('token', data)
+        self.assertEqual(data['user']['email'], 'demo@brandithm.com')
+        self.assertEqual(data['user']['full_name'], 'Evaluator Demo Account')
+
 
 if __name__ == '__main__':
     unittest.main()

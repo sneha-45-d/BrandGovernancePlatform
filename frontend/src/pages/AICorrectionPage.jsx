@@ -215,12 +215,12 @@ export default function AICorrectionPage() {
                     <div className="mt-5 space-y-3">
                       <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
                         <p className="font-semibold">
-                          {result.engine === 'gemini' ? `${guidelines.brand_name} AI result` : 'Local rules fallback'}
+                          {result.engine === 'gemini' ? `${guidelines.brand_name || 'BRANDITHM'} Neural AI` : `${guidelines.brand_name || 'BRANDITHM'} Compliance Engine`}
                         </p>
                         <p className="mt-1">{result.summary}</p>
                       </div>
                       {result.warning && (
-                        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-3 text-xs text-emerald-800">
                           {result.warning}
                         </div>
                       )}

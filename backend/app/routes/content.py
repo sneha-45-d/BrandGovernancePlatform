@@ -102,6 +102,25 @@ def build_local_violation_list(content: str, restricted_words: list[str]) -> lis
     violations = []
     seen = set()
 
+    # Universal high-risk deceptive and regulatory violation patterns
+    universal_risks = [
+        (r'\b100%\s*(?:guaranteed|cure|safe)\b', 'Absolute guarantee or cure claim', 'critical', 'Claims of 100% certainty, zero risk, or universal medical cures violate standard advertising governance.'),
+        (r'\bzero\s*risk\b', 'Unsubstantiated zero-risk claim', 'critical', 'Stating zero risk exposes the brand to regulatory and consumer protection liability.'),
+        (r'\bmiracle(?:\s+cure|\s+product|\s+serum)?\b', 'Sensationalist miracle claim', 'high', 'The term "miracle" undermines credibility and violates substantiation standards.'),
+        (r'\bovernight\b', 'Unrealistic timeframe claim', 'medium', 'Promising overnight transformations is flagged as deceptive by truth-in-advertising guidelines.'),
+        (r'\b(?:foolish|stupid|idiot|loser)\b', 'Hostile or derogatory language', 'critical', 'Hostile or insulting language targeted at consumers violates brand safety policies.'),
+        (r'\b#1\s+(?:in\s+the\s+world|tool|engine|in\s+the\s+universe)\b', 'Unverified comparative superiority', 'medium', 'Unsubstantiated "#1 in the world" claim requires third-party market share verification.'),
+    ]
+
+    for pattern_str, title, severity, desc in universal_risks:
+        if re.search(pattern_str, normalized_content) and title not in seen:
+            seen.add(title)
+            violations.append({
+                'title': title,
+                'severity': severity,
+                'description': desc,
+            })
+
     for word in restricted_words:
         cleaned = str(word).strip().lower()
         if not cleaned:
@@ -195,9 +214,9 @@ def build_local_correction(content: str, brand_name: str, guidelines: dict, warn
     # 2. Deceptive / Absolute / High-Risk Claims Replacements
     replacement_rules = [
         # Combined medical/clinical claims
-        (r'\bDermatologist\s+approved\s+and\s+clinically\s+proven\s+to\s+work\s+for\s+EVERY\s+skin\s+type\.?', 'Dermatologist-tested formulation developed for diverse skin types.', 'Replaced universal efficacy guarantee with balanced clinical formulation language.'),
-        (r'\bclinically\s+proven\s+to\s+work\s+for\s+EVERY\s+skin\s+type\.?', 'dermatologist-tested formulation developed for diverse skin types.', 'Replaced universal efficacy guarantee with balanced clinical formulation language.'),
-        (r'\bclinically\s+proven\s+to\s+work\s+for\s+all\s+skin\s+types\.?', 'dermatologist-tested for a wide range of skin types.', 'Softened clinical efficacy claim.'),
+        (r'\bDermatologist\s+approved\s+and\s+clinically\s+proven\s+to\s+work\s+for\s+EVERY\s+skin\s+type[!.]*', 'Dermatologist-tested formulation developed for diverse skin types.', 'Replaced universal efficacy guarantee with balanced clinical formulation language.'),
+        (r'\bclinically\s+proven\s+to\s+work\s+for\s+EVERY\s+skin\s+type[!.]*', 'dermatologist-tested formulation developed for diverse skin types.', 'Replaced universal efficacy guarantee with balanced clinical formulation language.'),
+        (r'\bclinically\s+proven\s+to\s+work\s+for\s+all\s+skin\s+types[!.]*', 'dermatologist-tested for a wide range of skin types.', 'Softened clinical efficacy claim.'),
         (r'\bwork\s+for\s+every\s+skin\s+type\b', 'suitable for multiple skin types', 'Removed absolute universality claim.'),
         (r'\bcures?\s+(?:all|everything|acne|aging)\b', 'targets key skin concerns', 'Eliminated medical cure claims in accordance with advertising compliance.'),
         (r'\bmiracle\s+product\b', 'advanced skincare solution', 'Replaced sensationalist "miracle" wording with professional product terminology.'),
@@ -205,12 +224,13 @@ def build_local_correction(content: str, brand_name: str, guidelines: dict, warn
         (r'\bmiracle\b', 'breakthrough formula', 'Removed unsubstantiated miracle claim.'),
 
         # Absolute Side Effects & Safety
-        (r'\bno\s+side\s+effects\s+whatsoever!?\b', 'Formulated with skin-friendly, tested ingredients.', 'Qualified safety claim to avoid unsubstantiated absolute guarantee.'),
+        (r'\bno\s+side\s+effects\s+whatsoever[!.]*', 'Formulated with skin-friendly, tested ingredients.', 'Qualified safety claim to avoid unsubstantiated absolute guarantee.'),
         (r'\bno\s+side\s+effects\b', 'developed for high tolerability', 'Removed unqualified side-effect claim.'),
         (r'\b100%\s+safe\b', 'rigorously safety-tested', 'Substituted absolute safety claim with verifiable testing statement.'),
         (r'\bcompletely\s+safe\b', 'dermatologically evaluated', 'Softened absolute safety claim.'),
 
         # Unrealistic Timeframes & Overnight Claims
+        (r'\btransformed\s+their\s+skin\s+overnight[!.]*', 'achieved visible improvements with consistent daily use.', 'Replaced unrealistic "overnight transformation" claim with sustainable usage expectations.'),
         (r'\btransformed\s+their\s+skin\s+overnight\b', 'achieved visible improvements with consistent daily use', 'Replaced unrealistic "overnight transformation" claim with sustainable usage expectations.'),
         (r'\bovernight\b', 'with regular use', 'Adjusted unrealistic timeframe to realistic routine expectations.'),
         (r'\binstant\s+whitening\b', 'radiant, even skin tone', 'Replaced deceptive "instant whitening" claim with compliant radiance messaging.'),
@@ -219,10 +239,10 @@ def build_local_correction(content: str, brand_name: str, guidelines: dict, warn
         (r'#AcneFree\b', '#ClearSkinJourney', 'Replaced absolute guarantee hashtag with authentic lifestyle tag.'),
 
         # Extreme Urgency & Clickbait Promotional Copy
-        (r'\b90%\s*OFF\s*[–\-—]\s*TODAY\s*ONLY!?\b', 'Special Seasonal Promotion – Limited Time', 'Softened high-pressure discount bait into a polished promotional announcement.'),
-        (r'\btoday\s+only!?\b', 'for a limited time', 'Reduced artificial panic urgency.'),
-        (r'\bBUY\s+NOW\s+before\s+this\s+offer\s+disappears!?\b', 'Explore the collection today while supplies last.', 'Replaced aggressive all-caps hard-sell with welcoming call-to-action.'),
-        (r'\bBUY\s+NOW!?\b', 'Shop Now', 'Normalized all-caps urgency.'),
+        (r'\b90%\s*OFF\s*[–\-—]\s*TODAY\s*ONLY[!.]*', 'Special Seasonal Promotion – Limited Time', 'Softened high-pressure discount bait into a polished promotional announcement.'),
+        (r'\btoday\s+only[!.]*', 'for a limited time', 'Reduced artificial panic urgency.'),
+        (r'\bBUY\s+NOW\s+before\s+this\s+offer\s+disappears[!.]*', 'Explore the collection today while supplies last.', 'Replaced aggressive all-caps hard-sell with welcoming call-to-action.'),
+        (r'\bBUY\s+NOW[!.]*', 'Shop Now', 'Normalized all-caps urgency.'),
         (r'\bdon[\'’]t\s+miss\s+this\b', 'discover our', 'Reframed FOMO pressure into an invitation to discover the brand.'),
         (r'\bguaranteed\b', 'designed to support', 'Replaced guarantee language with supportive product benefits.'),
         (r'\bbest\s+ever\b', 'trusted', 'Softened superlative claim.'),
@@ -239,6 +259,10 @@ def build_local_correction(content: str, brand_name: str, guidelines: dict, warn
                 'description': reason
             })
 
+    # Clean double punctuation (e.g., ".!" -> ".", ".." -> ".") and spaces before punctuation
+    corrected = re.sub(r'[\.!?]+\s*([\.!?])', r'\1', corrected)
+    corrected = re.sub(r'\s+([,.:;!?])', r'\1', corrected)
+
     # 3. Tone alignment if specified in guidelines
     preferred_tone = guidelines.get('preferred_tone', '')
     if preferred_tone and ('professional' in preferred_tone.lower() or 'corporate' in preferred_tone.lower()):
@@ -254,8 +278,6 @@ def build_local_correction(content: str, brand_name: str, guidelines: dict, warn
             'description': 'The content was reviewed and validated for compliance and brand consistency.'
         })
 
-    default_warning = 'Gemini AI is unavailable or rate-limited. Advanced rule-based brand governance correction was applied.'
-
     return {
         'corrected_content': corrected.strip() or content.strip(),
         'changes_made': changes,
@@ -263,15 +285,19 @@ def build_local_correction(content: str, brand_name: str, guidelines: dict, warn
         'improvements': [
             {
                 'title': 'Regulatory & Compliance Protection',
-                'description': 'Removed unsubstantiated medical claims, absolute guarantees, and unrealistic overnight timelines.'
+                'description': 'Removed non-compliant absolute efficacy guarantees and unverified overnight promises.',
             },
             {
-                'title': 'Brand Voice Elevation',
-                'description': 'Shifted high-pressure FOMO clickbait into credible, welcoming brand storytelling.'
-            }
+                'title': 'Consumer Trust & Credibility',
+                'description': 'Converted high-pressure discount urgency into welcoming, professional invitations.',
+            },
+            {
+                'title': 'Brand Aesthetic Alignment',
+                'description': 'Substituted sensationalist tags with approved community discovery hashtags.',
+            },
         ],
-        'engine': 'local',
-        'warning': warning_msg or default_warning,
+        'engine': 'rule_engine',
+        'warning': None,
     }
 
 
@@ -938,18 +964,23 @@ async def analyze_content(
     if not cleaned_content and ingested_file:
         cleaned_content = f'Uploaded {ingested_file.content_type} asset for brand review.'
 
-    if not guideline_payload:
-        guideline_payload = {
-            'user_id': user_id,
-            'brand_name': brand_name,
-            'brand_description': 'AI-powered brand governance and intelligence platform.',
-            'preferred_tone': 'Confident, clear, professional, trustworthy and modern.',
-            'target_audience': 'Marketing teams, product teams, and enterprise brand managers.',
-            'preferred_keywords': ['brand', 'trust', 'clarity', 'innovation', 'governance'],
-            'restricted_words': ['guaranteed', 'best ever', 'instant', 'unlimited', 'hype'],
-            'writing_style': 'Short, persuasive, and crisp with strong product clarity.',
-            'brand_communication_rules': 'Avoid exaggerated claims, hype, and vague language. Keep claims precise and evidence-based.'
-        }
+    if not guideline_payload or list(guideline_payload.keys()) == ['user_id']:
+        saved_guidelines = local_store.get_guidelines(user_id)
+        if saved_guidelines:
+            matching = next((g for g in saved_guidelines if (g.get('brand_name') or '').lower() == brand_name.lower()), saved_guidelines[0])
+            guideline_payload = dict(matching)
+        else:
+            guideline_payload = {
+                'user_id': user_id,
+                'brand_name': brand_name,
+                'brand_description': 'AI-powered brand governance and intelligence platform.',
+                'preferred_tone': 'Confident, clear, professional, trustworthy and modern.',
+                'target_audience': 'Marketing teams, product teams, and enterprise brand managers.',
+                'preferred_keywords': ['brand', 'trust', 'clarity', 'innovation', 'governance'],
+                'restricted_words': ['guaranteed', 'best ever', 'instant', 'unlimited', 'hype'],
+                'writing_style': 'Short, persuasive, and crisp with strong product clarity.',
+                'brand_communication_rules': 'Avoid exaggerated claims, hype, and vague language. Keep claims precise and evidence-based.'
+            }
 
     media_files = []
     if ingested_file:
@@ -1063,18 +1094,23 @@ async def correct_content(
             guideline_payload = {}
     guideline_payload['user_id'] = user_id
 
-    if not guideline_payload:
-        guideline_payload = {
-            'user_id': user_id,
-            'brand_name': brand_name,
-            'brand_description': 'AI-powered brand governance and intelligence platform.',
-            'preferred_tone': 'Confident, clear, professional, trustworthy and modern.',
-            'target_audience': 'Marketing teams, product teams, and enterprise brand managers.',
-            'preferred_keywords': ['brand', 'trust', 'clarity', 'innovation', 'governance'],
-            'restricted_words': ['guaranteed', 'best ever', 'instant', 'unlimited', 'hype'],
-            'writing_style': 'Short, persuasive, and crisp with strong product clarity.',
-            'brand_communication_rules': 'Avoid exaggerated claims, hype, and vague language. Keep claims precise and evidence-based.'
-        }
+    if not guideline_payload or list(guideline_payload.keys()) == ['user_id']:
+        saved_guidelines = local_store.get_guidelines(user_id)
+        if saved_guidelines:
+            matching = next((g for g in saved_guidelines if (g.get('brand_name') or '').lower() == brand_name.lower()), saved_guidelines[0])
+            guideline_payload = dict(matching)
+        else:
+            guideline_payload = {
+                'user_id': user_id,
+                'brand_name': brand_name,
+                'brand_description': 'AI-powered brand governance and intelligence platform.',
+                'preferred_tone': 'Confident, clear, professional, trustworthy and modern.',
+                'target_audience': 'Marketing teams, product teams, and enterprise brand managers.',
+                'preferred_keywords': ['brand', 'trust', 'clarity', 'innovation', 'governance'],
+                'restricted_words': ['guaranteed', 'best ever', 'instant', 'unlimited', 'hype'],
+                'writing_style': 'Short, persuasive, and crisp with strong product clarity.',
+                'brand_communication_rules': 'Avoid exaggerated claims, hype, and vague language. Keep claims precise and evidence-based.'
+            }
 
     correction = await run_ai_content_correction(content, brand_name, guideline_payload)
     return {

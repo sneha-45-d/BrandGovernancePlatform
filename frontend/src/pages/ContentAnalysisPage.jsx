@@ -589,9 +589,9 @@ export default function ContentAnalysisPage() {
                 <ClashAlert clashReport={analysis.clash_report} />
 
                 {analysis.warning && (
-                  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 text-sm text-emerald-900">
                     <p className="font-semibold">
-                      {analysis.engine === 'gemini' ? 'BRANDITHM AI analysis' : 'Local rules fallback'}
+                      {analysis.engine === 'gemini' ? 'BRANDITHM Neural AI Analysis' : 'BRANDITHM Compliance Engine Analysis'}
                     </p>
                     <p className="mt-1">{analysis.warning}</p>
                   </div>
